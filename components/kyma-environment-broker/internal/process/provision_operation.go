@@ -15,10 +15,11 @@ import (
 
 type ProvisionOperationManager struct {
 	storage storage.Provisioning
+	log     logrus.FieldLogger
 }
 
-func NewProvisionOperationManager(storage storage.Operations) *ProvisionOperationManager {
-	return &ProvisionOperationManager{storage: storage}
+func NewProvisionOperationManager(storage storage.Operations, log logrus.FieldLogger) *ProvisionOperationManager {
+	return &ProvisionOperationManager{storage: storage, log: log}
 }
 
 // OperationSucceeded marks the operation as succeeded and only repeats it if there is a storage error
@@ -47,26 +48,27 @@ func (om *ProvisionOperationManager) OperationFailed(operation internal.Provisio
 func (om *ProvisionOperationManager) UpdateOperation(operation internal.ProvisioningOperation) (internal.ProvisioningOperation, time.Duration) {
 	updatedOperation, err := om.storage.UpdateProvisioningOperation(operation)
 	if err != nil {
+		om.log.Errorf("Error when calling UpdateUpgradeKymaOperation on storage for operation %s: %s", operation.ID, err.Error())
 		return operation, 1 * time.Minute
 	}
 	return *updatedOperation, 0
 }
 
 // RetryOperationOnce retries the operation once and fails the operation when call second time
-func (om *ProvisionOperationManager) RetryOperationOnce(operation internal.ProvisioningOperation, errorMessage string, wait time.Duration, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
-	return om.RetryOperation(operation, errorMessage, wait, wait+1, log)
+func (om *ProvisionOperationManager) RetryOperationOnce(operation internal.ProvisioningOperation, errorMessage string, wait time.Duration) (internal.ProvisioningOperation, time.Duration, error) {
+	return om.RetryOperation(operation, errorMessage, wait, wait+1)
 }
 
 // RetryOperation retries an operation for at maxTime in retryInterval steps and fails the operation if retrying failed
-func (om *ProvisionOperationManager) RetryOperation(operation internal.ProvisioningOperation, errorMessage string, retryInterval time.Duration, maxTime time.Duration, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (om *ProvisionOperationManager) RetryOperation(operation internal.ProvisioningOperation, errorMessage string, retryInterval time.Duration, maxTime time.Duration) (internal.ProvisioningOperation, time.Duration, error) {
 	since := time.Since(operation.UpdatedAt)
 
-	log.Infof("Retry Operation was triggered with message: %s", errorMessage)
-	log.Infof("Retrying for %s in %s steps", maxTime.String(), retryInterval.String())
+	om.log.Infof("Retry Operation was triggered with message: %s", errorMessage)
+	om.log.Infof("Retrying for %s in %s steps", maxTime.String(), retryInterval.String())
 	if since < maxTime {
 		return operation, retryInterval, nil
 	}
-	log.Errorf("Aborting after %s of failing retries", maxTime.String())
+	om.log.Errorf("Aborting after %s of failing retries", maxTime.String())
 	return om.OperationFailed(operation, errorMessage)
 }
 

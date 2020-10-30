@@ -16,7 +16,7 @@ func TestUpgradeKymaOperationManager_OperationSucceeded(t *testing.T) {
 	// given
 	memory := storage.NewMemoryStorage()
 	operations := memory.Operations()
-	opManager := NewUpgradeKymaOperationManager(operations)
+	opManager := NewUpgradeKymaOperationManager(operations, fixLogger())
 	op := fixUpgradeKymaOperation()
 	err := operations.InsertUpgradeKymaOperation(op)
 	require.NoError(t, err)
@@ -34,7 +34,7 @@ func TestUpgradeKymaOperationManager_OperationFailed(t *testing.T) {
 	// given
 	memory := storage.NewMemoryStorage()
 	operations := memory.Operations()
-	opManager := NewUpgradeKymaOperationManager(operations)
+	opManager := NewUpgradeKymaOperationManager(operations, fixLogger())
 	op := fixUpgradeKymaOperation()
 	err := operations.InsertUpgradeKymaOperation(op)
 	require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestUpgradeKymaOperationManager_RetryOperation(t *testing.T) {
 	// given
 	memory := storage.NewMemoryStorage()
 	operations := memory.Operations()
-	opManager := NewUpgradeKymaOperationManager(operations)
+	opManager := NewUpgradeKymaOperationManager(operations, fixLogger())
 	op := internal.UpgradeKymaOperation{}
 	op.UpdatedAt = time.Now()
 	retryInterval := time.Hour
@@ -67,7 +67,7 @@ func TestUpgradeKymaOperationManager_RetryOperation(t *testing.T) {
 	require.NoError(t, err)
 
 	// then - first call
-	op, when, err := opManager.RetryOperation(op, errorMessage, retryInterval, maxtime, fixLogger())
+	op, when, err := opManager.RetryOperation(op, errorMessage, retryInterval, maxtime)
 
 	// when - first retry
 	assert.True(t, when > 0)
@@ -77,7 +77,7 @@ func TestUpgradeKymaOperationManager_RetryOperation(t *testing.T) {
 	t.Log(op.UpdatedAt.String())
 	op.UpdatedAt = op.UpdatedAt.Add(-retryInterval - time.Second) // simulate wait of first retry
 	t.Log(op.UpdatedAt.String())
-	op, when, err = opManager.RetryOperation(op, errorMessage, retryInterval, maxtime, fixLogger())
+	op, when, err = opManager.RetryOperation(op, errorMessage, retryInterval, maxtime)
 
 	// when - second call => retry
 	assert.True(t, when > 0)

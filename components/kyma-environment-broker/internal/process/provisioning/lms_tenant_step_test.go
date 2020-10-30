@@ -15,7 +15,7 @@ func TestProvideLmsTenantStep_TenantProviderWithRetry(t *testing.T) {
 	// given
 	now := time.Now()
 	opRepo := storage.NewMemoryStorage().Operations()
-	tenantStep := NewProvideLmsTenantStep(fakeErrorTenantProvider{}, opRepo, "eu", true)
+	tenantStep := NewProvideLmsTenantStep(fakeErrorTenantProvider{}, opRepo, "eu", true, fixLogger())
 
 	inputCreator := newInputCreator()
 	operation := internal.ProvisioningOperation{
@@ -41,7 +41,7 @@ func TestProvideLmsTenantStep_TenantProviderWithError(t *testing.T) {
 		// given
 		now := time.Now().Add(-10 * time.Hour)
 		opRepo := storage.NewMemoryStorage().Operations()
-		tenantStep := NewProvideLmsTenantStep(fakeErrorTenantProvider{}, opRepo, "eu", isMandatory)
+		tenantStep := NewProvideLmsTenantStep(fakeErrorTenantProvider{}, opRepo, "eu", isMandatory, fixLogger())
 
 		inputCreator := newInputCreator()
 		operation := internal.ProvisioningOperation{

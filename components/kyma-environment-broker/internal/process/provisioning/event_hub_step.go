@@ -42,9 +42,10 @@ type ProvisionAzureEventHubStep struct {
 	processazure.EventHub
 }
 
-func NewProvisionAzureEventHubStep(os storage.Operations, hyperscalerProvider azure.HyperscalerProvider, accountProvider hyperscaler.AccountProvider, ctx context.Context) *ProvisionAzureEventHubStep {
+func NewProvisionAzureEventHubStep(os storage.Operations, hyperscalerProvider azure.HyperscalerProvider, accountProvider hyperscaler.AccountProvider,
+	ctx context.Context, log logrus.FieldLogger) *ProvisionAzureEventHubStep {
 	return &ProvisionAzureEventHubStep{
-		operationManager: process.NewProvisionOperationManager(os),
+		operationManager: process.NewProvisionOperationManager(os, log),
 		EventHub: processazure.EventHub{
 			HyperscalerProvider: hyperscalerProvider,
 			AccountProvider:     accountProvider,
@@ -58,7 +59,7 @@ func (p *ProvisionAzureEventHubStep) Name() string {
 }
 
 func (p *ProvisionAzureEventHubStep) Run(operation internal.ProvisioningOperation,
-	log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+	opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 
 	hypType := hyperscaler.Azure
 
@@ -67,17 +68,17 @@ func (p *ProvisionAzureEventHubStep) Run(operation internal.ProvisioningOperatio
 	if err != nil {
 		// if the parameters are incorrect, there is no reason to retry the operation
 		// a new request has to be issued by the user
-		log.Errorf("Aborting after failing to get valid operation provisioning parameters: %v", err)
+		opLog.Errorf("Aborting after failing to get valid operation provisioning parameters: %v", err)
 		return p.operationManager.OperationFailed(operation, "invalid operation provisioning parameters")
 	}
-	log.Infof("HAP lookup for credentials to provision cluster for global account ID %s on Hyperscaler %s", pp.ErsContext.GlobalAccountID, hypType)
+	opLog.Infof("HAP lookup for credentials to provision cluster for global account ID %s on Hyperscaler %s", pp.ErsContext.GlobalAccountID, hypType)
 
 	// get hyperscaler credentials from HAP
 	credentials, err := p.EventHub.AccountProvider.GardenerCredentials(hypType, pp.ErsContext.GlobalAccountID)
 	if err != nil {
 		// retrying might solve the issue, the HAP could be temporarily unavailable
 		errorMessage := fmt.Sprintf("Unable to retrieve Gardener Credentials from HAP lookup: %v", err)
-		return p.operationManager.RetryOperation(operation, errorMessage, time.Minute, time.Minute*30, log)
+		return p.operationManager.RetryOperation(operation, errorMessage, time.Minute, time.Minute*30)
 	}
 	azureCfg, err := azure.GetConfigFromHAPCredentialsAndProvisioningParams(credentials, pp)
 	if err != nil {
@@ -87,7 +88,7 @@ func (p *ProvisionAzureEventHubStep) Run(operation internal.ProvisioningOperatio
 	}
 
 	// create hyperscaler client
-	azureClient, err := p.EventHub.HyperscalerProvider.GetClient(azureCfg, log)
+	azureClient, err := p.EventHub.HyperscalerProvider.GetClient(azureCfg, opLog)
 	if err != nil {
 		// internal error, repeating doesn't solve the problem
 		errorMessage := fmt.Sprintf("Failed to create Azure EventHubs client: %v", err)
@@ -110,9 +111,9 @@ func (p *ProvisionAzureEventHubStep) Run(operation internal.ProvisioningOperatio
 	if err != nil {
 		// retrying might solve the issue while communicating with azure, e.g. network problems etc
 		errorMessage := fmt.Sprintf("Failed to persist Azure Resource Group [%s] with error: %v", groupName, err)
-		return p.operationManager.RetryOperation(operation, errorMessage, time.Minute, time.Minute*30, log)
+		return p.operationManager.RetryOperation(operation, errorMessage, time.Minute, time.Minute*30)
 	}
-	log.Printf("Persisted Azure Resource Group [%s]", groupName)
+	opLog.Printf("Persisted Azure Resource Group [%s]", groupName)
 
 	// create EventHubs Namespace
 	eventHubsNamespace := uniqueName
@@ -120,22 +121,22 @@ func (p *ProvisionAzureEventHubStep) Run(operation internal.ProvisioningOperatio
 	if err != nil {
 		// retrying might solve the issue while communicating with azure, e.g. network problems etc
 		errorMessage := fmt.Sprintf("Failed to persist Azure EventHubs Namespace [%s] with error: %v", eventHubsNamespace, err)
-		return p.operationManager.RetryOperation(operation, errorMessage, time.Minute, time.Minute*30, log)
+		return p.operationManager.RetryOperation(operation, errorMessage, time.Minute, time.Minute*30)
 	}
-	log.Printf("Persisted Azure EventHubs Namespace [%s]", eventHubsNamespace)
+	opLog.Printf("Persisted Azure EventHubs Namespace [%s]", eventHubsNamespace)
 
 	// get EventHubs Namespace secret
 	accessKeys, err := azureClient.GetEventhubAccessKeys(p.EventHub.Context, *resourceGroup.Name, *eventHubNamespace.Name, authorizationRuleName)
 	if err != nil {
 		// retrying might solve the issue while communicating with azure, e.g. network problems etc
 		errorMessage := fmt.Sprintf("Unable to retrieve access keys to azure event-hub namespace: %v", err)
-		return p.operationManager.RetryOperation(operation, errorMessage, time.Minute, time.Minute*30, log)
+		return p.operationManager.RetryOperation(operation, errorMessage, time.Minute, time.Minute*30)
 	}
 	if accessKeys.PrimaryConnectionString == nil {
 		// if GetEventhubAccessKeys() does not fail then a non-nil accessKey is returned
 		// then retry the operation once
 		errorMessage := "PrimaryConnectionString is nil"
-		return p.operationManager.RetryOperationOnce(operation, errorMessage, time.Second*15, log)
+		return p.operationManager.RetryOperationOnce(operation, errorMessage, time.Second*15)
 	}
 	kafkaEndpoint := extractEndpoint(accessKeys)
 	kafkaPassword := *accessKeys.PrimaryConnectionString

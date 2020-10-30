@@ -28,27 +28,27 @@ func (alo *AuditLogOverrides) Name() string {
 	return "Audit_Log_Overrides"
 }
 
-func NewAuditLogOverridesStep(os storage.Operations, cfg auditlog.Config) *AuditLogOverrides {
+func NewAuditLogOverridesStep(os storage.Operations, cfg auditlog.Config, log logrus.FieldLogger) *AuditLogOverrides {
 	fileSystem := afero.NewOsFs()
 
 	return &AuditLogOverrides{
-		process.NewProvisionOperationManager(os),
+		process.NewProvisionOperationManager(os, log),
 		fileSystem,
 		cfg,
 	}
 }
 
-func (alo *AuditLogOverrides) Run(operation internal.ProvisioningOperation, logger logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (alo *AuditLogOverrides) Run(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 
 	// Fetch the region
 	pp, err := operation.GetProvisioningParameters()
 	if err != nil {
-		logger.Errorf("Unable to get provisioning parameters", err.Error())
+		opLog.Errorf("Unable to get provisioning parameters", err.Error())
 		return operation, 0, errors.New("unable to get provisioning parameters")
 	}
 	luaScript, err := alo.readFile("/auditlog-script/script")
 	if err != nil {
-		logger.Errorf("Unable to read audit config script: %v", err)
+		opLog.Errorf("Unable to read audit config script: %v", err)
 		return operation, 0, err
 	}
 
@@ -57,21 +57,21 @@ func (alo *AuditLogOverrides) Run(operation internal.ProvisioningOperation, logg
 
 	u, err := url.Parse(alo.auditLogConfig.URL)
 	if err != nil {
-		logger.Errorf("Unable to parse the URL: %v", err.Error())
+		opLog.Errorf("Unable to parse the URL: %v", err.Error())
 		return operation, 0, err
 	}
 	if u.Path == "" {
-		logger.Errorf("There is no Path passed in the URL")
+		opLog.Errorf("There is no Path passed in the URL")
 		return operation, 0, errors.New("there is no Path passed in the URL")
 	}
 	auditLogHost, auditLogPort, err := net.SplitHostPort(u.Host)
 	if err != nil {
-		logger.Errorf("Unable to split URL: %v", err.Error())
+		opLog.Errorf("Unable to split URL: %v", err.Error())
 		return operation, 0, err
 	}
 	if auditLogPort == "" {
 		auditLogPort = "443"
-		logger.Infof("There is no Port passed in the URL. Setting default to 443")
+		opLog.Infof("There is no Port passed in the URL. Setting default to 443")
 	}
 
 	operation.InputCreator.AppendOverrides("logging", []*gqlschema.ConfigEntryInput{

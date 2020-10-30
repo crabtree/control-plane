@@ -12,10 +12,11 @@ import (
 
 type UpgradeKymaOperationManager struct {
 	storage storage.UpgradeKyma
+	log     logrus.FieldLogger
 }
 
-func NewUpgradeKymaOperationManager(storage storage.Operations) *UpgradeKymaOperationManager {
-	return &UpgradeKymaOperationManager{storage: storage}
+func NewUpgradeKymaOperationManager(storage storage.Operations, log logrus.FieldLogger) *UpgradeKymaOperationManager {
+	return &UpgradeKymaOperationManager{storage: storage, log: log}
 }
 
 // OperationSucceeded marks the operation as succeeded and only repeats it if there is a storage error
@@ -41,15 +42,15 @@ func (om *UpgradeKymaOperationManager) OperationFailed(operation internal.Upgrad
 }
 
 // RetryOperation retries an operation for at maxTime in retryInterval steps and fails the operation if retrying failed
-func (om *UpgradeKymaOperationManager) RetryOperation(operation internal.UpgradeKymaOperation, errorMessage string, retryInterval time.Duration, maxTime time.Duration, log logrus.FieldLogger) (internal.UpgradeKymaOperation, time.Duration, error) {
+func (om *UpgradeKymaOperationManager) RetryOperation(operation internal.UpgradeKymaOperation, errorMessage string, retryInterval time.Duration, maxTime time.Duration) (internal.UpgradeKymaOperation, time.Duration, error) {
 	since := time.Since(operation.UpdatedAt)
 
-	log.Infof("Retry Operation was triggered with message: %s", errorMessage)
-	log.Infof("Retrying for %s in %s steps", maxTime.String(), retryInterval.String())
+	om.log.Infof("Retry Operation was triggered with message: %s", errorMessage)
+	om.log.Infof("Retrying for %s in %s steps", maxTime.String(), retryInterval.String())
 	if since < maxTime {
 		return operation, retryInterval, nil
 	}
-	log.Errorf("Aborting after %s of failing retries", maxTime.String())
+	om.log.Errorf("Aborting after %s of failing retries", maxTime.String())
 	return om.OperationFailed(operation, errorMessage)
 }
 
@@ -57,6 +58,7 @@ func (om *UpgradeKymaOperationManager) RetryOperation(operation internal.Upgrade
 func (om *UpgradeKymaOperationManager) UpdateOperation(operation internal.UpgradeKymaOperation) (internal.UpgradeKymaOperation, time.Duration) {
 	updatedOperation, err := om.storage.UpdateUpgradeKymaOperation(operation)
 	if err != nil {
+		om.log.Errorf("Error when calling UpdateUpgradeKymaOperation on storage for operation %s: %s", operation.ID, err.Error())
 		return operation, 1 * time.Minute
 	}
 	return *updatedOperation, 0

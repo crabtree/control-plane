@@ -43,10 +43,10 @@ type lmsCertStep struct {
 	normalizationRegexp *regexp.Regexp
 }
 
-func NewLmsCertificatesStep(certProvider LmsClient, os storage.Operations, isMandatory bool) *lmsCertStep {
+func NewLmsCertificatesStep(certProvider LmsClient, os storage.Operations, isMandatory bool, log logrus.FieldLogger) *lmsCertStep {
 	return &lmsCertStep{
 		LmsStep: LmsStep{
-			operationManager: process.NewProvisionOperationManager(os),
+			operationManager: process.NewProvisionOperationManager(os, log),
 			isMandatory:      isMandatory,
 			expirationTime:   lmsTimeout,
 		},
@@ -200,11 +200,11 @@ type LmsStep struct {
 	expirationTime   time.Duration
 }
 
-func (s *LmsStep) handleError(operation internal.ProvisioningOperation, log logrus.FieldLogger, since time.Duration, msg string, err error) (internal.ProvisioningOperation, time.Duration, error) {
-	log.Errorf("%s: %s", msg, err)
+func (s *LmsStep) handleError(operation internal.ProvisioningOperation, opLog logrus.FieldLogger, since time.Duration, msg string, err error) (internal.ProvisioningOperation, time.Duration, error) {
+	opLog.Errorf("%s: %s", msg, err)
 	switch {
 	case kebError.IsTemporaryError(err):
-		return s.operationManager.RetryOperation(operation, msg, 10*time.Second, time.Minute*30, log)
+		return s.operationManager.RetryOperation(operation, msg, 10*time.Second, time.Minute*30)
 	default:
 		if since < s.expirationTime {
 			return operation, tenantReadyRetryInterval, nil

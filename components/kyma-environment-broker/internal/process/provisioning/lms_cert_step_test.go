@@ -16,7 +16,7 @@ import (
 func TestCertStep_RunFreshOperation(t *testing.T) {
 	// given
 	repo := storage.NewMemoryStorage().Operations()
-	svc := NewLmsCertificatesStep(nil, repo, false)
+	svc := NewLmsCertificatesStep(nil, repo, false, fixLogger())
 	// a fresh operation
 	operation := internal.ProvisioningOperation{
 		Lms: internal.LMS{},
@@ -33,7 +33,7 @@ func TestCertStep_Run(t *testing.T) {
 	// given
 	cli, tID := newFakeClientWithTenant(0)
 	repo := storage.NewMemoryStorage().Operations()
-	svc := NewLmsCertificatesStep(cli, repo, false)
+	svc := NewLmsCertificatesStep(cli, repo, false, fixLogger())
 	operation := internal.ProvisioningOperation{
 		Lms: internal.LMS{
 			TenantID: tID,
@@ -59,7 +59,7 @@ func TestCertStep_TenantNotReady(t *testing.T) {
 		// given
 		cli, tID := newFakeClientWithTenant(time.Hour)
 		repo := storage.NewMemoryStorage().Operations()
-		svc := NewLmsCertificatesStep(cli, repo, isMandatory)
+		svc := NewLmsCertificatesStep(cli, repo, isMandatory, fixLogger())
 		operation := internal.ProvisioningOperation{
 			Lms: internal.LMS{
 				TenantID:    tID,
@@ -87,7 +87,7 @@ func TestCertStep_TenantNotReadyTimeout(t *testing.T) {
 		// given
 		cli, tID := newFakeClientWithTenant(time.Hour)
 		repo := storage.NewMemoryStorage().Operations()
-		svc := NewLmsCertificatesStep(cli, repo, isMandatory)
+		svc := NewLmsCertificatesStep(cli, repo, isMandatory, fixLogger())
 		operation := internal.ProvisioningOperation{
 			Lms: internal.LMS{
 				TenantID:    tID,
@@ -115,9 +115,9 @@ func TestLmsStepsHappyPath(t *testing.T) {
 	lmsClient := lms.NewFakeClient(0)
 	opRepo := storage.NewMemoryStorage().Operations()
 	tRepo := storage.NewMemoryStorage().LMSTenants()
-	certStep := NewLmsCertificatesStep(lmsClient, opRepo, false)
+	certStep := NewLmsCertificatesStep(lmsClient, opRepo, false, fixLogger())
 	tManager := lms.NewTenantManager(tRepo, lmsClient, fixLogger())
-	tenantStep := NewProvideLmsTenantStep(tManager, opRepo, "eu", false)
+	tenantStep := NewProvideLmsTenantStep(tManager, opRepo, "eu", false, fixLogger())
 
 	inputCreator := newInputCreator()
 	operation := internal.ProvisioningOperation{

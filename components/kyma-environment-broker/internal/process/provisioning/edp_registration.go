@@ -27,9 +27,9 @@ type EDPRegistrationStep struct {
 	config           edp.Config
 }
 
-func NewEDPRegistrationStep(os storage.Operations, client EDPClient, config edp.Config) *EDPRegistrationStep {
+func NewEDPRegistrationStep(os storage.Operations, client EDPClient, config edp.Config, log logrus.FieldLogger) *EDPRegistrationStep {
 	return &EDPRegistrationStep{
-		operationManager: process.NewProvisionOperationManager(os),
+		operationManager: process.NewProvisionOperationManager(os, log),
 		client:           client,
 		config:           config,
 	}
@@ -39,26 +39,26 @@ func (s *EDPRegistrationStep) Name() string {
 	return "EDP_Registration"
 }
 
-func (s *EDPRegistrationStep) Run(operation internal.ProvisioningOperation, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *EDPRegistrationStep) Run(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 	parameters, err := operation.GetProvisioningParameters()
 	if err != nil {
-		return s.handleError(operation, err, log, "invalid operation provisioning parameters")
+		return s.handleError(operation, err, opLog, "invalid operation provisioning parameters")
 	}
 	subAccountID := parameters.ErsContext.SubAccountID
 
-	log.Infof("Create DataTenant for %s subaccount", subAccountID)
+	opLog.Infof("Create DataTenant for %s subaccount", subAccountID)
 	err = s.client.CreateDataTenant(edp.DataTenantPayload{
 		Name:        subAccountID,
 		Environment: s.config.Environment,
 		Secret:      s.generateSecret(subAccountID, s.config.Environment),
 	})
 	if err != nil {
-		return s.handleError(operation, err, log, "cannot create DataTenant")
+		return s.handleError(operation, err, opLog, "cannot create DataTenant")
 	}
 
-	log.Infof("Create DataTenant metadata for %s subaccount", subAccountID)
+	opLog.Infof("Create DataTenant metadata for %s subaccount", subAccountID)
 	for key, value := range map[string]string{
-		edp.MaasConsumerEnvironmentKey: s.selectEnvironmentKey(parameters.PlatformRegion, log),
+		edp.MaasConsumerEnvironmentKey: s.selectEnvironmentKey(parameters.PlatformRegion, opLog),
 		edp.MaasConsumerRegionKey:      parameters.PlatformRegion,
 		edp.MaasConsumerSubAccountKey:  subAccountID,
 	} {
@@ -67,33 +67,33 @@ func (s *EDPRegistrationStep) Run(operation internal.ProvisioningOperation, log 
 			Value: value,
 		})
 		if err != nil {
-			return s.handleError(operation, err, log, fmt.Sprintf("cannot create DataTenant metadata %s", key))
+			return s.handleError(operation, err, opLog, fmt.Sprintf("cannot create DataTenant metadata %s", key))
 		}
 	}
 
 	return operation, 0, nil
 }
 
-func (s *EDPRegistrationStep) handleError(operation internal.ProvisioningOperation, err error, log logrus.FieldLogger, msg string) (internal.ProvisioningOperation, time.Duration, error) {
-	log.Errorf("%s: %s", msg, err)
+func (s *EDPRegistrationStep) handleError(operation internal.ProvisioningOperation, err error, opLog logrus.FieldLogger, msg string) (internal.ProvisioningOperation, time.Duration, error) {
+	opLog.Errorf("%s: %s", msg, err)
 
 	if kebError.IsTemporaryError(err) {
 		since := time.Since(operation.UpdatedAt)
 		if since < time.Minute*30 {
-			log.Errorf("request to EDP failed: %s. Retry...", err)
+			opLog.Errorf("request to EDP failed: %s. Retry...", err)
 			return operation, 10 * time.Second, nil
 		}
 	}
 
 	if !s.config.Required {
-		log.Errorf("Step %s failed. Step is not required. Skip step.", s.Name())
+		opLog.Errorf("Step %s failed. Step is not required. Skip step.", s.Name())
 		return operation, 0, nil
 	}
 
 	return s.operationManager.OperationFailed(operation, msg)
 }
 
-func (s *EDPRegistrationStep) selectEnvironmentKey(region string, log logrus.FieldLogger) string {
+func (s *EDPRegistrationStep) selectEnvironmentKey(region string, opLog logrus.FieldLogger) string {
 	parts := strings.Split(region, "-")
 	switch parts[0] {
 	case "cf":
@@ -103,7 +103,7 @@ func (s *EDPRegistrationStep) selectEnvironmentKey(region string, log logrus.Fie
 	case "neo":
 		return "NEO"
 	default:
-		log.Warnf("region %s does not fit any of the options, default CF is used", region)
+		opLog.Warnf("region %s does not fit any of the options, default CF is used", region)
 		return "CF"
 	}
 }

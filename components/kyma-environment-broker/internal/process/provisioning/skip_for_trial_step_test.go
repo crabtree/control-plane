@@ -27,7 +27,7 @@ func TestSkipForTrialPlanStepShouldSkip(t *testing.T) {
 	mockStep := &automock.Step{}
 	mockStep.On("Name").Return("Test")
 
-	skipStep := NewSkipForTrialPlanStep(memoryStorage.Operations(), mockStep)
+	skipStep := NewSkipForTrialPlanStep(memoryStorage.Operations(), mockStep, fixLogger())
 
 	// When
 	returnedOperation, time, err := skipStep.Run(operation, log)
@@ -51,7 +51,7 @@ func TestSkipForTrialPlanStepShouldNotSkip(t *testing.T) {
 	mockStep := &automock.Step{}
 	mockStep.On("Run", operation, log).Return(anotherOperation, skipTime, nil)
 
-	skipStep := NewSkipForTrialPlanStep(memoryStorage.Operations(), mockStep)
+	skipStep := NewSkipForTrialPlanStep(memoryStorage.Operations(), mockStep, fixLogger())
 
 	// When
 	returnedOperation, time, err := skipStep.Run(operation, log)

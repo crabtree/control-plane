@@ -37,7 +37,7 @@ func TestNatssWithInitialOverrides(t *testing.T) {
 	operation.InputCreator = simpleInputCreator
 	var runTime time.Duration = 0
 
-	step := NewNatsStreamingOverridesStep(memoryStorage.Operations())
+	step := NewNatsStreamingOverridesStep(memoryStorage.Operations(), fixLogger())
 
 	// When
 	returnedOperation, time, err := step.Run(operation, log)
@@ -61,7 +61,7 @@ func TestNatssWithEmptyOverrides(t *testing.T) {
 	operation.InputCreator = simpleInputCreator
 	var runTime time.Duration = 0
 
-	step := NewNatsStreamingOverridesStep(memoryStorage.Operations())
+	step := NewNatsStreamingOverridesStep(memoryStorage.Operations(), fixLogger())
 
 	// When
 	returnedOperation, time, err := step.Run(operation, log)

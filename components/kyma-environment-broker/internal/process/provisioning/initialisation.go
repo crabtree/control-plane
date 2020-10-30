@@ -57,9 +57,10 @@ func NewInitialisationStep(os storage.Operations,
 	avsExternalEvalCreator *ExternalEvalCreator,
 	iasType *IASType,
 	timeout time.Duration,
-	configurator KymaVersionConfigurator) *InitialisationStep {
+	configurator KymaVersionConfigurator,
+	log logrus.FieldLogger) *InitialisationStep {
 	return &InitialisationStep{
-		operationManager:        process.NewProvisionOperationManager(os),
+		operationManager:        process.NewProvisionOperationManager(os, log),
 		instanceStorage:         is,
 		provisionerClient:       pc,
 		directorClient:          dc,
@@ -75,10 +76,10 @@ func (s *InitialisationStep) Name() string {
 	return "Provision_Initialization"
 }
 
-func (s *InitialisationStep) Run(operation internal.ProvisioningOperation, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *InitialisationStep) Run(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 	pp, err := operation.GetProvisioningParameters()
 	if err != nil {
-		log.Errorf("cannot fetch provisioning parameters from operation: %s", err)
+		opLog.Errorf("cannot fetch provisioning parameters from operation: %s", err)
 		return s.operationManager.OperationFailed(operation, "invalid operation provisioning parameters")
 	}
 	if pp.PlanID == broker.TrialPlanID {
@@ -89,71 +90,71 @@ func (s *InitialisationStep) Run(operation internal.ProvisioningOperation, log l
 	switch {
 	case err == nil:
 		if inst.RuntimeID == "" {
-			log.Info("runtimeID not exist, initialize runtime input request")
-			return s.initializeRuntimeInputRequest(operation, log)
+			opLog.Info("runtimeID not exist, initialize runtime input request")
+			return s.initializeRuntimeInputRequest(operation, opLog)
 		}
-		log.Info("runtimeID exist, check instance status")
-		return s.checkRuntimeStatus(operation, log.WithField("runtimeID", inst.RuntimeID))
+		opLog.Info("runtimeID exist, check instance status")
+		return s.checkRuntimeStatus(operation, opLog.WithField("runtimeID", inst.RuntimeID))
 	case dberr.IsNotFound(err):
-		log.Info("instance not exist")
+		opLog.Info("instance not exist")
 		return s.operationManager.OperationFailed(operation, "instance was not created")
 	default:
-		log.Errorf("unable to get instance from storage: %s", err)
+		opLog.Errorf("unable to get instance from storage: %s", err)
 		return operation, 1 * time.Second, nil
 	}
 }
 
-func (s *InitialisationStep) initializeRuntimeInputRequest(operation internal.ProvisioningOperation, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *InitialisationStep) initializeRuntimeInputRequest(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 	pp, err := operation.GetProvisioningParameters()
 	if err != nil {
-		log.Errorf("cannot fetch provisioning parameters from operation: %s", err)
+		opLog.Errorf("cannot fetch provisioning parameters from operation: %s", err)
 		return s.operationManager.OperationFailed(operation, "invalid operation provisioning parameters")
 	}
 
-	err = s.configureKymaVersion(&pp, log)
+	err = s.configureKymaVersion(&pp, opLog)
 	if err != nil {
-		return s.operationManager.RetryOperation(operation, err.Error(), 5*time.Second, 5*time.Minute, log)
+		return s.operationManager.RetryOperation(operation, err.Error(), 5*time.Second, 5*time.Minute)
 	}
 
-	log.Infof("create provisioner input creator for %q plan ID", pp.PlanID)
+	opLog.Infof("create provisioner input creator for %q plan ID", pp.PlanID)
 	creator, err := s.inputBuilder.CreateProvisionInput(pp)
 	switch {
 	case err == nil:
 		operation.InputCreator = creator
 		return operation, 0, nil
 	case kebError.IsTemporaryError(err):
-		log.Errorf("cannot create input creator at the moment for plan %s and version %s: %s", pp.PlanID, pp.Parameters.KymaVersion, err)
-		return s.operationManager.RetryOperation(operation, err.Error(), 5*time.Second, 5*time.Minute, log)
+		opLog.Errorf("cannot create input creator at the moment for plan %s and version %s: %s", pp.PlanID, pp.Parameters.KymaVersion, err)
+		return s.operationManager.RetryOperation(operation, err.Error(), 5*time.Second, 5*time.Minute)
 	default:
-		log.Errorf("cannot create input creator for plan %s: %s", pp.PlanID, err)
+		opLog.Errorf("cannot create input creator for plan %s: %s", pp.PlanID, err)
 		return s.operationManager.OperationFailed(operation, "cannot create provisioning input creator")
 	}
 }
 
-func (s *InitialisationStep) configureKymaVersion(pp *internal.ProvisioningParameters, log logrus.FieldLogger) error {
+func (s *InitialisationStep) configureKymaVersion(pp *internal.ProvisioningParameters, opLog logrus.FieldLogger) error {
 	var kymaVersion string
 	if pp.Parameters.KymaVersion == "" {
-		log.Infof("looking for kyma version for %s", pp.ErsContext.GlobalAccountID)
+		opLog.Infof("looking for kyma version for %s", pp.ErsContext.GlobalAccountID)
 		ver, found, err := s.kymaVersionConfigurator.ForGlobalAccount(pp.ErsContext.GlobalAccountID)
 		if err != nil {
 			return err
 		}
 		if found {
-			log.Infof("input builder setting up to work with configured Kyma version %s per global account", ver)
+			opLog.Infof("input builder setting up to work with configured Kyma version %s per global account", ver)
 			pp.Parameters.KymaVersion = ver
 			return nil
 		}
-		log.Info("input builder setting up to work with default Kyma version")
+		opLog.Info("input builder setting up to work with default Kyma version")
 	} else {
-		log.Infof("setting up input builder to work with %s Kyma version provided by the provisioning parameters", kymaVersion)
+		opLog.Infof("setting up input builder to work with %s Kyma version provided by the provisioning parameters", kymaVersion)
 	}
 
 	return nil
 }
 
-func (s *InitialisationStep) checkRuntimeStatus(operation internal.ProvisioningOperation, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *InitialisationStep) checkRuntimeStatus(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 	if time.Since(operation.UpdatedAt) > s.provisioningTimeout {
-		log.Infof("operation has reached the time limit: updated operation time: %s", operation.UpdatedAt)
+		opLog.Infof("operation has reached the time limit: updated operation time: %s", operation.UpdatedAt)
 		return s.operationManager.OperationFailed(operation, fmt.Sprintf("operation has reached the time limit: %s", s.provisioningTimeout))
 	}
 
@@ -164,14 +165,14 @@ func (s *InitialisationStep) checkRuntimeStatus(operation internal.ProvisioningO
 
 	_, err = url.ParseRequestURI(instance.DashboardURL)
 	if err == nil {
-		return s.launchPostActions(operation, instance, log, "Operation succeeded")
+		return s.launchPostActions(operation, instance, opLog, "Operation succeeded")
 	}
 
 	status, err := s.provisionerClient.RuntimeOperationStatus(instance.GlobalAccountID, operation.ProvisionerOperationID)
 	if err != nil {
 		return operation, 1 * time.Minute, nil
 	}
-	log.Infof("call to provisioner returned %s status", status.State.String())
+	opLog.Infof("call to provisioner returned %s status", status.State.String())
 
 	var msg string
 	if status.Message != nil {
@@ -180,11 +181,11 @@ func (s *InitialisationStep) checkRuntimeStatus(operation internal.ProvisioningO
 
 	switch status.State {
 	case gqlschema.OperationStateSucceeded:
-		repeat, err := s.handleDashboardURL(instance, log)
+		repeat, err := s.handleDashboardURL(instance, opLog)
 		if err != nil || repeat != 0 {
 			return operation, repeat, err
 		}
-		return s.launchPostActions(operation, instance, log, msg)
+		return s.launchPostActions(operation, instance, opLog, msg)
 	case gqlschema.OperationStateInProgress:
 		return operation, 2 * time.Minute, nil
 	case gqlschema.OperationStatePending:
@@ -196,10 +197,10 @@ func (s *InitialisationStep) checkRuntimeStatus(operation internal.ProvisioningO
 	return s.operationManager.OperationFailed(operation, fmt.Sprintf("unsupported provisioner client status: %s", status.State.String()))
 }
 
-func (s *InitialisationStep) handleDashboardURL(instance *internal.Instance, log logrus.FieldLogger) (time.Duration, error) {
+func (s *InitialisationStep) handleDashboardURL(instance *internal.Instance, opLog logrus.FieldLogger) (time.Duration, error) {
 	dashboardURL, err := s.directorClient.GetConsoleURL(instance.GlobalAccountID, instance.RuntimeID)
 	if kebError.IsTemporaryError(err) {
-		log.Errorf("cannot get console URL from director client: %s", err)
+		opLog.Errorf("cannot get console URL from director client: %s", err)
 		return 3 * time.Minute, nil
 	}
 	if err != nil {
@@ -209,22 +210,22 @@ func (s *InitialisationStep) handleDashboardURL(instance *internal.Instance, log
 	instance.DashboardURL = dashboardURL
 	err = s.instanceStorage.Update(*instance)
 	if err != nil {
-		log.Errorf("cannot update instance: %s", err)
+		opLog.Errorf("cannot update instance: %s", err)
 		return 10 * time.Second, nil
 	}
 
 	return 0, nil
 }
 
-func (s *InitialisationStep) launchPostActions(operation internal.ProvisioningOperation, instance *internal.Instance, log logrus.FieldLogger, msg string) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *InitialisationStep) launchPostActions(operation internal.ProvisioningOperation, instance *internal.Instance, opLog logrus.FieldLogger, msg string) (internal.ProvisioningOperation, time.Duration, error) {
 	// action #1
-	operation, repeat, err := s.externalEvalCreator.createEval(operation, instance.DashboardURL, log)
+	operation, repeat, err := s.externalEvalCreator.createEval(operation, instance.DashboardURL, opLog)
 	if err != nil || repeat != 0 {
 		return operation, repeat, nil
 	}
 
 	// action #2
-	repeat, err = s.iasType.ConfigureType(operation, instance.DashboardURL, log)
+	repeat, err = s.iasType.ConfigureType(operation, instance.DashboardURL, opLog)
 	if err != nil || repeat != 0 {
 		return operation, repeat, nil
 	}
@@ -232,9 +233,9 @@ func (s *InitialisationStep) launchPostActions(operation internal.ProvisioningOp
 		grafanaPath := strings.Replace(instance.DashboardURL, "console.", "grafana.", 1)
 		err = s.directorClient.SetLabel(instance.GlobalAccountID, instance.RuntimeID, grafanaURLLabel, grafanaPath)
 		if err != nil {
-			log.Errorf("Cannot set labels in director: %s", err)
+			opLog.Errorf("Cannot set labels in director: %s", err)
 		} else {
-			log.Infof("Label %s:%s set correctly", grafanaURLLabel, instance.DashboardURL)
+			opLog.Infof("Label %s:%s set correctly", grafanaURLLabel, instance.DashboardURL)
 		}
 	}
 

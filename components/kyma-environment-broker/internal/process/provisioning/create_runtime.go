@@ -30,9 +30,9 @@ type CreateRuntimeStep struct {
 	provisionerClient   provisioner.Client
 }
 
-func NewCreateRuntimeStep(os storage.Operations, runtimeStorage storage.RuntimeStates, is storage.Instances, cli provisioner.Client) *CreateRuntimeStep {
+func NewCreateRuntimeStep(os storage.Operations, runtimeStorage storage.RuntimeStates, is storage.Instances, cli provisioner.Client, log logrus.FieldLogger) *CreateRuntimeStep {
 	return &CreateRuntimeStep{
-		operationManager:    process.NewProvisionOperationManager(os),
+		operationManager:    process.NewProvisionOperationManager(os, log),
 		instanceStorage:     is,
 		provisionerClient:   cli,
 		runtimeStateStorage: runtimeStorage,
@@ -43,34 +43,34 @@ func (s *CreateRuntimeStep) Name() string {
 	return "Create_Runtime"
 }
 
-func (s *CreateRuntimeStep) Run(operation internal.ProvisioningOperation, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *CreateRuntimeStep) Run(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 	if time.Since(operation.UpdatedAt) > CreateRuntimeTimeout {
-		log.Infof("operation has reached the time limit: updated operation time: %s", operation.UpdatedAt)
+		opLog.Infof("operation has reached the time limit: updated operation time: %s", operation.UpdatedAt)
 		return s.operationManager.OperationFailed(operation, fmt.Sprintf("operation has reached the time limit: %s", CreateRuntimeTimeout))
 	}
 
 	pp, err := operation.GetProvisioningParameters()
 	if err != nil {
-		log.Errorf("Unable to get provisioning parameters: %s", err.Error())
+		opLog.Errorf("Unable to get provisioning parameters: %s", err.Error())
 		return s.operationManager.OperationFailed(operation, "invalid operation provisioning parameters")
 	}
 
 	requestInput, err := s.createProvisionInput(operation, pp)
 	if err != nil {
-		log.Errorf("Unable to create provisioning input: %s", err.Error())
+		opLog.Errorf("Unable to create provisioning input: %s", err.Error())
 		return s.operationManager.OperationFailed(operation, "invalid operation data - cannot create provisioning input")
 	}
 
 	var provisionerResponse gqlschema.OperationStatus
 	if operation.ProvisionerOperationID == "" {
-		log.Infof("call ProvisionRuntime: kymaVersion=%s, kubernetesVersion=%s", requestInput.KymaConfig.Version, requestInput.ClusterConfig.GardenerConfig.KubernetesVersion)
+		opLog.Infof("call ProvisionRuntime: kymaVersion=%s, kubernetesVersion=%s", requestInput.KymaConfig.Version, requestInput.ClusterConfig.GardenerConfig.KubernetesVersion)
 		provisionerResponse, err := s.provisionerClient.ProvisionRuntime(pp.ErsContext.GlobalAccountID, pp.ErsContext.SubAccountID, requestInput)
 		switch {
 		case kebError.IsTemporaryError(err):
-			log.Errorf("call to provisioner failed (temporary error): %s", err)
+			opLog.Errorf("call to provisioner failed (temporary error): %s", err)
 			return operation, 5 * time.Second, nil
 		case err != nil:
-			log.Errorf("call to Provisioner failed: %s", err)
+			opLog.Errorf("call to Provisioner failed: %s", err)
 			return s.operationManager.OperationFailed(operation, "call to the provisioner service failed")
 		}
 
@@ -80,7 +80,7 @@ func (s *CreateRuntimeStep) Run(operation internal.ProvisioningOperation, log lo
 		}
 		operation, repeat := s.operationManager.UpdateOperation(operation)
 		if repeat != 0 {
-			log.Errorf("cannot save operation ID from provisioner")
+			opLog.Errorf("cannot save operation ID from provisioner")
 			return operation, 5 * time.Second, nil
 		}
 	}
@@ -88,27 +88,27 @@ func (s *CreateRuntimeStep) Run(operation internal.ProvisioningOperation, log lo
 	if provisionerResponse.RuntimeID == nil {
 		provisionerResponse, err = s.provisionerClient.RuntimeOperationStatus(pp.ErsContext.GlobalAccountID, operation.ProvisionerOperationID)
 		if err != nil {
-			log.Errorf("call to provisioner about operation status failed: %s", err)
+			opLog.Errorf("call to provisioner about operation status failed: %s", err)
 			return operation, 1 * time.Minute, nil
 		}
 	}
 	if provisionerResponse.RuntimeID == nil {
 		return operation, 1 * time.Minute, nil
 	}
-	log = log.WithField("runtimeID", *provisionerResponse.RuntimeID)
-	log.Infof("call to provisioner succeeded, got operation ID %q", *provisionerResponse.ID)
+	opLog = opLog.WithField("runtimeID", *provisionerResponse.RuntimeID)
+	opLog.Infof("call to provisioner succeeded, got operation ID %q", *provisionerResponse.ID)
 
 	err = s.runtimeStateStorage.Insert(
 		internal.NewRuntimeState(*provisionerResponse.RuntimeID, operation.ID, requestInput.KymaConfig, requestInput.ClusterConfig.GardenerConfig),
 	)
 	if err != nil {
-		log.Errorf("cannot insert runtimeState: %s", err)
+		opLog.Errorf("cannot insert runtimeState: %s", err)
 		return operation, 10 * time.Second, nil
 	}
 
 	instance, err := s.instanceStorage.GetByID(operation.InstanceID)
 	if err != nil {
-		log.Errorf("cannot get instance: %s", err)
+		opLog.Errorf("cannot get instance: %s", err)
 		return operation, 1 * time.Minute, nil
 	}
 	instance.RuntimeID = *provisionerResponse.RuntimeID
@@ -116,11 +116,11 @@ func (s *CreateRuntimeStep) Run(operation internal.ProvisioningOperation, log lo
 
 	err = s.instanceStorage.Update(*instance)
 	if err != nil {
-		log.Errorf("cannot update instance in storage: %s", err)
+		opLog.Errorf("cannot update instance in storage: %s", err)
 		return operation, 10 * time.Second, nil
 	}
 
-	log.Info("runtime creation process initiated successfully")
+	opLog.Info("runtime creation process initiated successfully")
 	// return repeat mode (1 sec) to start the initialization step which will now check the runtime status
 	return operation, 1 * time.Second, nil
 }

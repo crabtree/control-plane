@@ -29,9 +29,9 @@ type avsNonSuccessResp struct {
 	Message string `json:"message"`
 }
 
-func NewDelegator(client *Client, avsConfig Config, operationsStorage storage.Operations) *Delegator {
+func NewDelegator(client *Client, avsConfig Config, operationsStorage storage.Operations, log logrus.FieldLogger) *Delegator {
 	return &Delegator{
-		operationManager:  process.NewProvisionOperationManager(operationsStorage),
+		operationManager:  process.NewProvisionOperationManager(operationsStorage, log),
 		avsConfig:         avsConfig,
 		client:            client,
 		operationsStorage: operationsStorage,
@@ -63,12 +63,12 @@ func (del *Delegator) CreateEvaluation(logger logrus.FieldLogger, operation inte
 		switch {
 		case err == nil:
 		case kebError.IsTemporaryError(err):
-			return del.operationManager.RetryOperation(operation, "", 10*time.Second, time.Minute*30, logger)
+			return del.operationManager.RetryOperation(operation, "", 10*time.Second, time.Minute*30)
 		default:
 			errMsg := "cannot create AVS evaluation"
 			logger.Errorf("%s: %s", errMsg, err)
 			retryConfig := evalAssistant.provideRetryConfig()
-			return del.operationManager.RetryOperation(operation, errMsg, retryConfig.retryInterval, retryConfig.maxTime, logger)
+			return del.operationManager.RetryOperation(operation, errMsg, retryConfig.retryInterval, retryConfig.maxTime)
 		}
 
 		evalAssistant.SetEvalId(&operation.Avs, evalResp.Id)

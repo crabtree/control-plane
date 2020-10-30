@@ -19,9 +19,9 @@ type IASRegistrationStep struct {
 	bundleBuilder    ias.BundleBuilder
 }
 
-func NewIASRegistrationStep(os storage.Operations, builder ias.BundleBuilder) *IASRegistrationStep {
+func NewIASRegistrationStep(os storage.Operations, builder ias.BundleBuilder, log logrus.FieldLogger) *IASRegistrationStep {
 	return &IASRegistrationStep{
-		operationManager: process.NewProvisionOperationManager(os),
+		operationManager: process.NewProvisionOperationManager(os, log),
 		bundleBuilder:    builder,
 	}
 }
@@ -30,42 +30,42 @@ func (s *IASRegistrationStep) Name() string {
 	return "IAS_Registration"
 }
 
-func (s *IASRegistrationStep) Run(operation internal.ProvisioningOperation, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *IASRegistrationStep) Run(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 	for spID := range ias.ServiceProviderInputs {
 		spb, err := s.bundleBuilder.NewBundle(operation.InstanceID, spID)
 		if err != nil {
 			msg := "failed to create new ServiceProvider Bundle"
-			log.Errorf("%s: %s", msg, err)
+			opLog.Errorf("%s: %s", msg, err)
 			return s.operationManager.OperationFailed(operation, msg)
 		}
 
-		log.Infof("Check if IAS ServiceProvider %q already exist", spb.ServiceProviderName())
+		opLog.Infof("Check if IAS ServiceProvider %q already exist", spb.ServiceProviderName())
 		err = spb.FetchServiceProviderData()
 		if err != nil {
-			return s.handleError(operation, err, log, "fetching IAS ServiceProvider data failed")
+			return s.handleError(operation, err, opLog, "fetching IAS ServiceProvider data failed")
 		}
 
 		if !spb.ServiceProviderExist() {
-			log.Infof("Create IAS ServiceProvider %q", spb.ServiceProviderName())
+			opLog.Infof("Create IAS ServiceProvider %q", spb.ServiceProviderName())
 			err = spb.CreateServiceProvider()
 			if err != nil {
-				return s.handleError(operation, err, log, "creating IAS ServiceProvider failed")
+				return s.handleError(operation, err, opLog, "creating IAS ServiceProvider failed")
 			}
 		} else {
-			log.Infof("IAS ServiceProvider %q already registered", spb.ServiceProviderName())
+			opLog.Infof("IAS ServiceProvider %q already registered", spb.ServiceProviderName())
 		}
 
-		log.Infof("Configure IAS ServiceProvider %q", spb.ServiceProviderName())
+		opLog.Infof("Configure IAS ServiceProvider %q", spb.ServiceProviderName())
 		err = spb.ConfigureServiceProvider()
 		if err != nil {
-			return s.handleError(operation, err, log, "configuring IAS ServiceProvider failed")
+			return s.handleError(operation, err, opLog, "configuring IAS ServiceProvider failed")
 		}
 
 		if spb.ServiceProviderType() == ias.OIDC {
-			log.Info("Generate IAS ServiceProvider Secret")
+			opLog.Info("Generate IAS ServiceProvider Secret")
 			secret, err := spb.GenerateSecret()
 			if err != nil {
-				return s.handleError(operation, err, log, "creating secret for IAS ServiceProvider failed")
+				return s.handleError(operation, err, opLog, "creating secret for IAS ServiceProvider failed")
 			}
 
 			switch spID {
@@ -89,11 +89,11 @@ func (s *IASRegistrationStep) Run(operation internal.ProvisioningOperation, log 
 	return operation, 0, nil
 }
 
-func (s *IASRegistrationStep) handleError(operation internal.ProvisioningOperation, err error, log logrus.FieldLogger, msg string) (internal.ProvisioningOperation, time.Duration, error) {
-	log.Errorf("%s: %s", msg, err)
+func (s *IASRegistrationStep) handleError(operation internal.ProvisioningOperation, err error, opLog logrus.FieldLogger, msg string) (internal.ProvisioningOperation, time.Duration, error) {
+	opLog.Errorf("%s: %s", msg, err)
 	switch {
 	case kebError.IsTemporaryError(err):
-		return s.operationManager.RetryOperation(operation, msg, 10*time.Second, time.Minute*30, log)
+		return s.operationManager.RetryOperation(operation, msg, 10*time.Second, time.Minute*30)
 	default:
 		return s.operationManager.OperationFailed(operation, msg)
 	}

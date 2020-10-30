@@ -50,10 +50,10 @@ func forTrialProvider(provider *internal.TrialCloudProvider) (hyperscaler.Type, 
 
 }
 
-func NewResolveCredentialsStep(os storage.Operations, accountProvider hyperscaler.AccountProvider) *ResolveCredentialsStep {
+func NewResolveCredentialsStep(os storage.Operations, accountProvider hyperscaler.AccountProvider, log logrus.FieldLogger) *ResolveCredentialsStep {
 
 	return &ResolveCredentialsStep{
-		operationManager: process.NewProvisionOperationManager(os),
+		operationManager: process.NewProvisionOperationManager(os, log),
 		opStorage:        os,
 		accountProvider:  accountProvider,
 	}
@@ -63,11 +63,11 @@ func (s *ResolveCredentialsStep) Name() string {
 	return "Resolve_Target_Secret"
 }
 
-func (s *ResolveCredentialsStep) Run(operation internal.ProvisioningOperation, logger logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *ResolveCredentialsStep) Run(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 
 	pp, err := operation.GetProvisioningParameters()
 	if err != nil {
-		logger.Error("Aborting after failing to get valid operation provisioning parameters")
+		opLog.Error("Aborting after failing to get valid operation provisioning parameters")
 		return s.operationManager.OperationFailed(operation, "invalid operation provisioning parameters")
 	}
 
@@ -77,22 +77,22 @@ func (s *ResolveCredentialsStep) Run(operation internal.ProvisioningOperation, l
 
 	hypType, err := getHyperscalerType(pp)
 	if err != nil {
-		logger.Error("Aborting after failing to determine the type of Hyperscaler to use for planID: %s", pp.PlanID)
+		opLog.Error("Aborting after failing to determine the type of Hyperscaler to use for planID: %s", pp.PlanID)
 		return s.operationManager.OperationFailed(operation, err.Error())
 	}
 
-	logger.Infof("HAP lookup for credentials to provision cluster for global account ID %s on Hyperscaler %s", pp.ErsContext.GlobalAccountID, hypType)
+	opLog.Infof("HAP lookup for credentials to provision cluster for global account ID %s on Hyperscaler %s", pp.ErsContext.GlobalAccountID, hypType)
 
 	var credentials hyperscaler.Credentials
 	if !broker.IsTrialPlan(pp.PlanID) {
 		credentials, err = s.accountProvider.GardenerCredentials(hypType, pp.ErsContext.GlobalAccountID)
 	} else {
-		logger.Infof("HAP lookup for shared credentials")
+		opLog.Infof("HAP lookup for shared credentials")
 		credentials, err = s.accountProvider.GardenerSharedCredentials(hypType)
 	}
 	if err != nil {
 		errMsg := fmt.Sprintf("HAP lookup for credentials to provision cluster for global account ID %s on Hyperscaler %s has failed: %s", pp.ErsContext.GlobalAccountID, hypType, err)
-		logger.Info(errMsg)
+		opLog.Info(errMsg)
 
 		// if failed retry step every 10s by next 10min
 		dur := time.Since(operation.UpdatedAt).Round(time.Minute)
@@ -101,14 +101,14 @@ func (s *ResolveCredentialsStep) Run(operation internal.ProvisioningOperation, l
 			return operation, 10 * time.Second, nil
 		}
 
-		logger.Errorf("Aborting after 10 minutes of failing to resolve provisioning credentials for global account ID %s on Hyperscaler %s", pp.ErsContext.GlobalAccountID, hypType)
+		opLog.Errorf("Aborting after 10 minutes of failing to resolve provisioning credentials for global account ID %s on Hyperscaler %s", pp.ErsContext.GlobalAccountID, hypType)
 		return s.operationManager.OperationFailed(operation, errMsg)
 	}
 
 	pp.Parameters.TargetSecret = &credentials.Name
 	err = operation.SetProvisioningParameters(pp)
 	if err != nil {
-		logger.Error("Aborting after failing to save provisioning parameters for operation")
+		opLog.Error("Aborting after failing to save provisioning parameters for operation")
 		return s.operationManager.OperationFailed(operation, err.Error())
 	}
 
@@ -117,7 +117,7 @@ func (s *ResolveCredentialsStep) Run(operation internal.ProvisioningOperation, l
 		return operation, 1 * time.Minute, nil
 	}
 
-	logger.Infof("Resolved %s as target secret name to use for cluster provisioning for global account ID %s on Hyperscaler %s", *pp.Parameters.TargetSecret, pp.ErsContext.GlobalAccountID, hypType)
+	opLog.Infof("Resolved %s as target secret name to use for cluster provisioning for global account ID %s on Hyperscaler %s", *pp.Parameters.TargetSecret, pp.ErsContext.GlobalAccountID, hypType)
 
 	return *updatedOperation, 0, nil
 }

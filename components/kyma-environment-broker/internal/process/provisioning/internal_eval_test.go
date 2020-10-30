@@ -44,7 +44,7 @@ func TestInternalEvaluationStep_Run(t *testing.T) {
 	avsConfig := avsConfig(mockOauthServer, mockAvsServer)
 	avsClient, err := avs.NewClient(context.TODO(), avsConfig, logrus.New())
 	assert.NoError(t, err)
-	avsDel := avs.NewDelegator(avsClient, avsConfig, memoryStorage.Operations())
+	avsDel := avs.NewDelegator(avsClient, avsConfig, memoryStorage.Operations(), fixLogger())
 	internalEvalAssistant := avs.NewInternalEvalAssistant(avsConfig)
 	ies := NewInternalEvaluationStep(avsDel, internalEvalAssistant)
 
@@ -89,7 +89,7 @@ func TestInternalEvaluationStep_WhenOperationIsRepeatedWithIdPresent(t *testing.
 	avsConfig := avsConfig(mockOauthServer, mockAvsServer)
 	avsClient, err := avs.NewClient(context.TODO(), avsConfig, logrus.New())
 	assert.NoError(t, err)
-	avsDel := avs.NewDelegator(avsClient, avsConfig, memoryStorage.Operations())
+	avsDel := avs.NewDelegator(avsClient, avsConfig, memoryStorage.Operations(), fixLogger())
 	internalEvalAssistant := avs.NewInternalEvalAssistant(avsConfig)
 	ies := NewInternalEvaluationStep(avsDel, internalEvalAssistant)
 

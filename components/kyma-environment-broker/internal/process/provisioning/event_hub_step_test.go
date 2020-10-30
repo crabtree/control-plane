@@ -104,6 +104,7 @@ func Test_StepsUnhappyPath(t *testing.T) {
 					azuretesting.NewFakeHyperscalerProvider(azuretesting.NewFakeNamespaceClientCreationError()),
 					accountProvider,
 					context.Background(),
+					fixLogger(),
 				)
 			},
 			wantRepeatOperation: true,
@@ -118,6 +119,7 @@ func Test_StepsUnhappyPath(t *testing.T) {
 					azuretesting.NewFakeHyperscalerProvider(azuretesting.NewFakeNamespaceClientListError()),
 					accountProvider,
 					context.Background(),
+					fixLogger(),
 				)
 			},
 			wantRepeatOperation: true,
@@ -132,6 +134,7 @@ func Test_StepsUnhappyPath(t *testing.T) {
 					azuretesting.NewFakeHyperscalerProvider(azuretesting.NewFakeNamespaceAccessKeysNil()),
 					accountProvider,
 					context.Background(),
+					fixLogger(),
 				)
 			},
 			wantRepeatOperation: true,
@@ -146,6 +149,7 @@ func Test_StepsUnhappyPath(t *testing.T) {
 					azuretesting.NewFakeHyperscalerProviderError(),
 					accountProvider,
 					context.Background(),
+					fixLogger(),
 				)
 			},
 			wantRepeatOperation: false,
@@ -160,6 +164,7 @@ func Test_StepsUnhappyPath(t *testing.T) {
 					azuretesting.NewFakeHyperscalerProvider(azuretesting.NewFakeNamespaceResourceGroupError()),
 					accountProvider,
 					context.Background(),
+					fixLogger(),
 				)
 			},
 			wantRepeatOperation: true,
@@ -383,7 +388,7 @@ func fixAccountProviderGardenerCredentialsError() *hyperscalerautomock.AccountPr
 
 func fixEventHubStep(memoryStorageOp storage.Operations, hyperscalerProvider azure.HyperscalerProvider,
 	accountProvider *hyperscalerautomock.AccountProvider) *ProvisionAzureEventHubStep {
-	return NewProvisionAzureEventHubStep(memoryStorageOp, hyperscalerProvider, accountProvider, context.Background())
+	return NewProvisionAzureEventHubStep(memoryStorageOp, hyperscalerProvider, accountProvider, context.Background(), fixLogger())
 }
 
 func fixProvisioningOperation(t *testing.T) internal.ProvisioningOperation {

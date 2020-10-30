@@ -264,7 +264,7 @@ func main() {
 		},
 		{
 			weight: 2,
-			step:   provisioning.NewOverridesFromSecretsAndConfigStep(ctx, cli, db.Operations()),
+			step:   provisioning.NewOverridesFromSecretsAndConfigStep(ctx, cli, db.Operations(), logs),
 		},
 		{
 			weight: 2,
@@ -485,7 +485,7 @@ func NewOrchestrationProcessingQueue(ctx context.Context, db storage.BrokerStora
 
 	upgradeKymaManager := upgrade_kyma.NewManager(db.Operations(), pub, logs.WithField("upgradeKyma", "manager"))
 
-	upgradeKymaInit := upgrade_kyma.NewInitialisationStep(db.Operations(), db.Instances(), provisionerClient, inputFactory, icfg)
+	upgradeKymaInit := upgrade_kyma.NewInitialisationStep(db.Operations(), db.Instances(), provisionerClient, inputFactory, logs, icfg)
 	upgradeKymaManager.InitStep(upgradeKymaInit)
 	upgradeKymaSteps := []struct {
 		disabled bool
@@ -494,11 +494,11 @@ func NewOrchestrationProcessingQueue(ctx context.Context, db storage.BrokerStora
 	}{
 		{
 			weight: 2,
-			step:   upgrade_kyma.NewOverridesFromSecretsAndConfigStep(ctx, cli, db.Operations()),
+			step:   upgrade_kyma.NewOverridesFromSecretsAndConfigStep(ctx, cli, db.Operations(), logs),
 		},
 		{
 			weight: 10,
-			step:   upgrade_kyma.NewUpgradeKymaStep(db.Operations(), db.RuntimeStates(), provisionerClient, icfg),
+			step:   upgrade_kyma.NewUpgradeKymaStep(db.Operations(), db.RuntimeStates(), provisionerClient, logs, icfg),
 		},
 	}
 	for _, step := range upgradeKymaSteps {

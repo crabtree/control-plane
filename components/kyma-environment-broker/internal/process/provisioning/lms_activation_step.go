@@ -19,9 +19,9 @@ type LmsActivationStep struct {
 	step             Step
 }
 
-func NewLmsActivationStep(os storage.Operations, cfg lms.Config, step Step) *LmsActivationStep {
+func NewLmsActivationStep(os storage.Operations, cfg lms.Config, step Step, log logrus.FieldLogger) *LmsActivationStep {
 	return &LmsActivationStep{
-		operationManager: process.NewProvisionOperationManager(os),
+		operationManager: process.NewProvisionOperationManager(os, log),
 		cfg:              cfg,
 		step:             step,
 	}

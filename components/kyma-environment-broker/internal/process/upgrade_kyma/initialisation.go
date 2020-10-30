@@ -31,7 +31,7 @@ type InitialisationStep struct {
 	timeSchedule      TimeSchedule
 }
 
-func NewInitialisationStep(os storage.Operations, is storage.Instances, pc provisioner.Client, b input.CreatorForPlan, timeSchedule *TimeSchedule) *InitialisationStep {
+func NewInitialisationStep(os storage.Operations, is storage.Instances, pc provisioner.Client, b input.CreatorForPlan, log logrus.FieldLogger, timeSchedule *TimeSchedule) *InitialisationStep {
 	ts := timeSchedule
 	if ts == nil {
 		ts = &TimeSchedule{
@@ -41,7 +41,7 @@ func NewInitialisationStep(os storage.Operations, is storage.Instances, pc provi
 		}
 	}
 	return &InitialisationStep{
-		operationManager:  process.NewUpgradeKymaOperationManager(os),
+		operationManager:  process.NewUpgradeKymaOperationManager(os, log),
 		operationStorage:  os,
 		instanceStorage:   is,
 		provisionerClient: pc,
@@ -54,22 +54,22 @@ func (s *InitialisationStep) Name() string {
 	return "Upgrade_Kyma_Initialisation"
 }
 
-func (s *InitialisationStep) Run(operation internal.UpgradeKymaOperation, log logrus.FieldLogger) (internal.UpgradeKymaOperation, time.Duration, error) {
+func (s *InitialisationStep) Run(operation internal.UpgradeKymaOperation, opLog logrus.FieldLogger) (internal.UpgradeKymaOperation, time.Duration, error) {
 	// if time window for this operation has finished we reprocess on next time window
 	if operation.MaintenanceWindowEnd.Before(time.Now()) {
 		until := time.Until(operation.MaintenanceWindowBegin)
-		log.Infof("Upgrade operation %s will be rescheduled in %v", operation.ID, until)
+		opLog.Infof("Upgrade operation %s will be rescheduled in %v", operation.ID, until)
 		return operation, until, nil
 	}
 
 	// rewrite necessary data from ProvisioningOperation to operation internal.UpgradeOperation
 	op, err := s.operationStorage.GetProvisioningOperationByInstanceID(operation.InstanceID)
 	if err != nil {
-		log.Errorf("while getting provisioning operation from storage")
+		opLog.Errorf("while getting provisioning operation from storage")
 		return operation, s.timeSchedule.Retry, nil
 	}
 	if op.State == domain.InProgress {
-		log.Info("waiting for provisioning operation to finish")
+		opLog.Info("waiting for provisioning operation to finish")
 		return operation, s.timeSchedule.UpgradeKymaTimeout, nil
 	}
 
@@ -80,7 +80,7 @@ func (s *InitialisationStep) Run(operation internal.UpgradeKymaOperation, log lo
 
 	err = operation.SetProvisioningParameters(parameters)
 	if err != nil {
-		log.Error("Aborting after failing to save provisioning parameters for operation")
+		opLog.Error("Aborting after failing to save provisioning parameters for operation")
 		return s.operationManager.OperationFailed(operation, err.Error())
 	}
 
@@ -88,47 +88,47 @@ func (s *InitialisationStep) Run(operation internal.UpgradeKymaOperation, log lo
 	switch {
 	case err == nil:
 		if operation.ProvisionerOperationID == "" {
-			log.Info("provisioner operation ID is empty, initialize upgrade runtime input request")
-			return s.initializeUpgradeRuntimeRequest(operation, log)
+			opLog.Info("provisioner operation ID is empty, initialize upgrade runtime input request")
+			return s.initializeUpgradeRuntimeRequest(operation, opLog)
 		}
-		log.Infof("runtime being upgraded, check operation status")
+		opLog.Infof("runtime being upgraded, check operation status")
 		operation.RuntimeID = instance.RuntimeID
-		return s.checkRuntimeStatus(operation, instance, log.WithField("runtimeID", instance.RuntimeID))
+		return s.checkRuntimeStatus(operation, instance, opLog.WithField("runtimeID", instance.RuntimeID))
 	case dberr.IsNotFound(err):
-		log.Info("instance not exist")
+		opLog.Info("instance not exist")
 		return s.operationManager.OperationFailed(operation, "instance was not found")
 	default:
-		log.Errorf("unable to get instance from storage: %s", err)
+		opLog.Errorf("unable to get instance from storage: %s", err)
 		return operation, s.timeSchedule.Retry, nil
 	}
 
 }
 
-func (s *InitialisationStep) initializeUpgradeRuntimeRequest(operation internal.UpgradeKymaOperation, log logrus.FieldLogger) (internal.UpgradeKymaOperation, time.Duration, error) {
+func (s *InitialisationStep) initializeUpgradeRuntimeRequest(operation internal.UpgradeKymaOperation, opLog logrus.FieldLogger) (internal.UpgradeKymaOperation, time.Duration, error) {
 	pp, err := operation.GetProvisioningParameters()
 	if err != nil {
-		log.Errorf("cannot fetch provisioning parameters from operation: %s", err)
+		opLog.Errorf("cannot fetch provisioning parameters from operation: %s", err)
 		return s.operationManager.OperationFailed(operation, "invalid operation provisioning parameters")
 	}
 
-	log.Infof("create provisioner input creator for plan ID %q", pp.PlanID)
+	opLog.Infof("create provisioner input creator for plan ID %q", pp.PlanID)
 	creator, err := s.inputBuilder.CreateUpgradeInput(pp)
 	switch {
 	case err == nil:
 		operation.InputCreator = creator
 		return operation, 0, nil // go to next step
 	case kebError.IsTemporaryError(err):
-		log.Errorf("cannot create upgrade runtime input creator at the moment for plan %s: %s", pp.PlanID, err)
-		return s.operationManager.RetryOperation(operation, err.Error(), 5*time.Second, 5*time.Minute, log)
+		opLog.Errorf("cannot create upgrade runtime input creator at the moment for plan %s: %s", pp.PlanID, err)
+		return s.operationManager.RetryOperation(operation, err.Error(), 5*time.Second, 5*time.Minute)
 	default:
-		log.Errorf("cannot create input creator for plan %s: %s", pp.PlanID, err)
+		opLog.Errorf("cannot create input creator for plan %s: %s", pp.PlanID, err)
 		return s.operationManager.OperationFailed(operation, "cannot create provisioning input creator")
 	}
 }
 
-func (s *InitialisationStep) checkRuntimeStatus(operation internal.UpgradeKymaOperation, instance *internal.Instance, log logrus.FieldLogger) (internal.UpgradeKymaOperation, time.Duration, error) {
+func (s *InitialisationStep) checkRuntimeStatus(operation internal.UpgradeKymaOperation, instance *internal.Instance, opLog logrus.FieldLogger) (internal.UpgradeKymaOperation, time.Duration, error) {
 	if time.Since(operation.UpdatedAt) > CheckStatusTimeout {
-		log.Infof("operation has reached the time limit: updated operation time: %s", operation.UpdatedAt)
+		opLog.Infof("operation has reached the time limit: updated operation time: %s", operation.UpdatedAt)
 		return s.operationManager.OperationFailed(operation, fmt.Sprintf("operation has reached the time limit: %s", CheckStatusTimeout))
 	}
 
@@ -136,7 +136,7 @@ func (s *InitialisationStep) checkRuntimeStatus(operation internal.UpgradeKymaOp
 	if err != nil {
 		return operation, s.timeSchedule.StatusCheck, nil
 	}
-	log.Infof("call to provisioner returned %s status", status.State.String())
+	opLog.Infof("call to provisioner returned %s status", status.State.String())
 
 	var msg string
 	if status.Message != nil {

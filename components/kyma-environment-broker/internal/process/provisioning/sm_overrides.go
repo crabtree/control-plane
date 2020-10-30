@@ -18,10 +18,10 @@ type ServiceManagerOverridesStep struct {
 	operationManager *process.ProvisionOperationManager
 }
 
-func NewServiceManagerOverridesStep(os storage.Operations, smOverride ServiceManagerOverrideConfig) *ServiceManagerOverridesStep {
+func NewServiceManagerOverridesStep(os storage.Operations, smOverride ServiceManagerOverrideConfig, log logrus.FieldLogger) *ServiceManagerOverridesStep {
 	return &ServiceManagerOverridesStep{
 		serviceManager:   smOverride,
-		operationManager: process.NewProvisionOperationManager(os),
+		operationManager: process.NewProvisionOperationManager(os, log),
 	}
 }
 
@@ -29,10 +29,10 @@ func (s *ServiceManagerOverridesStep) Name() string {
 	return "ServiceManagerOverrides"
 }
 
-func (s *ServiceManagerOverridesStep) Run(operation internal.ProvisioningOperation, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *ServiceManagerOverridesStep) Run(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 	pp, err := operation.GetProvisioningParameters()
 	if err != nil {
-		log.Errorf("cannot fetch provisioning parameters from operation: %s", err)
+		opLog.Errorf("cannot fetch provisioning parameters from operation: %s", err)
 		return s.operationManager.OperationFailed(operation, "invalid operation provisioning parameters")
 	}
 
@@ -56,7 +56,7 @@ func (s *ServiceManagerOverridesStep) Run(operation internal.ProvisioningOperati
 		}
 	} else {
 		if ersCtx.ServiceManager == nil {
-			log.Errorf("Service Manager Credentials are required to be send in provisioning request (override_mode: %q)", s.serviceManager.OverrideMode)
+			opLog.Errorf("Service Manager Credentials are required to be send in provisioning request (override_mode: %q)", s.serviceManager.OverrideMode)
 			return s.operationManager.OperationFailed(operation, "Service Manager Credentials are required to be send in provisioning request.")
 		}
 

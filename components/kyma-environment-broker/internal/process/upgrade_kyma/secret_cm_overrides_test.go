@@ -71,7 +71,7 @@ func TestOverridesFromSecretsAndConfigStep_Run(t *testing.T) {
 			ProvisioningParameters: `{}`,
 		}
 
-		step := NewOverridesFromSecretsAndConfigStep(context.TODO(), client, memoryStorage.Operations())
+		step := NewOverridesFromSecretsAndConfigStep(context.TODO(), client, memoryStorage.Operations(), logrus.New())
 
 		// When
 		operation, repeat, err := step.Run(operation, logrus.New())
@@ -115,7 +115,7 @@ func TestOverridesFromSecretsAndConfigStep_Run(t *testing.T) {
 			ProvisioningParameters: `{"parameters": {"licence_type": "TestDevelopmentAndDemo"}}`,
 		}
 
-		step := NewOverridesFromSecretsAndConfigStep(context.TODO(), client, memoryStorage.Operations())
+		step := NewOverridesFromSecretsAndConfigStep(context.TODO(), client, memoryStorage.Operations(), logrus.New())
 
 		// When
 		operation, repeat, err := step.Run(operation, logrus.New())

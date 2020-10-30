@@ -81,7 +81,7 @@ func TestServiceManagerOverridesStepSuccess(t *testing.T) {
 			}
 
 			memoryStorage := storage.NewMemoryStorage()
-			smStep := NewServiceManagerOverridesStep(memoryStorage.Operations(), tC.overrideParams)
+			smStep := NewServiceManagerOverridesStep(memoryStorage.Operations(), tC.overrideParams, fixLogger())
 
 			// when
 			gotOperation, retryTime, err := smStep.Run(operation, NewLogDummy())
@@ -121,7 +121,7 @@ func TestServiceManagerOverridesStepError(t *testing.T) {
 
 			memoryStorage := storage.NewMemoryStorage()
 			require.NoError(t, memoryStorage.Operations().InsertProvisioningOperation(operation))
-			smStep := NewServiceManagerOverridesStep(memoryStorage.Operations(), ServiceManagerOverrideConfig{})
+			smStep := NewServiceManagerOverridesStep(memoryStorage.Operations(), ServiceManagerOverrideConfig{}, fixLogger())
 
 			// when
 			gotOperation, retryTime, err := smStep.Run(operation, NewLogDummy())

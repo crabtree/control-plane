@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kyma-project/control-plane/components/kyma-environment-broker/internal/auditlog"
+	"github.com/sirupsen/logrus"
 
 	"github.com/kyma-project/control-plane/components/kyma-environment-broker/internal"
 	"github.com/kyma-project/control-plane/components/kyma-environment-broker/internal/process/provisioning/automock"
@@ -26,7 +27,7 @@ func TestAuditLog_ScriptFileDoesNotExist(t *testing.T) {
 		Password: "aaaa",
 		Tenant:   "tenant",
 	}
-	svc := NewAuditLogOverridesStep(repo, cfg)
+	svc := NewAuditLogOverridesStep(repo, cfg, logrus.New())
 	svc.fs = mm
 
 	operation := internal.ProvisioningOperation{
@@ -66,7 +67,7 @@ return "fooBar"
 		Password: "aaaa",
 		Tenant:   "tenant",
 	}
-	svc := NewAuditLogOverridesStep(repo, cfg)
+	svc := NewAuditLogOverridesStep(repo, cfg, logrus.New())
 	svc.fs = mm
 
 	inputCreatorMock := &automock.ProvisionerInputCreator{}

@@ -71,7 +71,7 @@ func TestIASRegistration_Run(t *testing.T) {
 		InputCreator: inputCreatorMock,
 	}
 
-	step := NewIASRegistrationStep(memoryStorage.Operations(), bundleBuilder)
+	step := NewIASRegistrationStep(memoryStorage.Operations(), bundleBuilder, fixLogger())
 
 	// when
 	_, repeat, err := step.Run(operation, logger.NewLogDummy())

@@ -24,14 +24,14 @@ type provideLmsTenantStep struct {
 	regionOverride   string
 }
 
-func NewProvideLmsTenantStep(tp LmsTenantProvider, repo storage.Operations, regionOverride string, isMandatory bool) *provideLmsTenantStep {
+func NewProvideLmsTenantStep(tp LmsTenantProvider, repo storage.Operations, regionOverride string, isMandatory bool, log logrus.FieldLogger) *provideLmsTenantStep {
 	return &provideLmsTenantStep{
 		LmsStep: LmsStep{
-			operationManager: process.NewProvisionOperationManager(repo),
+			operationManager: process.NewProvisionOperationManager(repo, log),
 			isMandatory:      isMandatory,
 			expirationTime:   3 * time.Minute,
 		},
-		operationManager: process.NewProvisionOperationManager(repo),
+		operationManager: process.NewProvisionOperationManager(repo, log),
 		tenantProvider:   tp,
 		regionOverride:   regionOverride,
 	}
@@ -41,7 +41,7 @@ func (s *provideLmsTenantStep) Name() string {
 	return "Create_LMS_Tenant"
 }
 
-func (s *provideLmsTenantStep) Run(operation internal.ProvisioningOperation, logger logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *provideLmsTenantStep) Run(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 	if operation.Lms.TenantID != "" {
 		return operation, 0, nil
 	}
@@ -49,7 +49,7 @@ func (s *provideLmsTenantStep) Run(operation internal.ProvisioningOperation, log
 	pp, err := operation.GetProvisioningParameters()
 	if err != nil {
 		msg := fmt.Sprintf("Unable to get provisioning parameters: %s", err.Error())
-		logger.Errorf(msg)
+		opLog.Errorf(msg)
 		return s.operationManager.OperationFailed(operation, msg)
 	}
 	region := s.provideRegion(pp.Parameters.Region)
@@ -58,7 +58,7 @@ func (s *provideLmsTenantStep) Run(operation internal.ProvisioningOperation, log
 	if err != nil {
 		return s.handleError(
 			operation,
-			logger,
+			opLog,
 			time.Since(operation.UpdatedAt),
 			fmt.Sprintf("Unable to get tenant for GlobalaccountID/region %s/%s", pp.ErsContext.GlobalAccountID, region),
 			err)
@@ -71,7 +71,7 @@ func (s *provideLmsTenantStep) Run(operation internal.ProvisioningOperation, log
 
 	op, repeat := s.operationManager.UpdateOperation(operation)
 	if repeat != 0 {
-		logger.Errorf("cannot save LMS tenant ID")
+		opLog.Errorf("cannot save LMS tenant ID")
 		return operation, time.Second, nil
 	}
 

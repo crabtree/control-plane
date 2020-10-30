@@ -11,6 +11,7 @@ import (
 	"github.com/kyma-project/control-plane/components/kyma-environment-broker/internal/logger"
 	"github.com/kyma-project/control-plane/components/kyma-environment-broker/internal/process/provisioning/automock"
 	"github.com/kyma-project/control-plane/components/kyma-environment-broker/internal/storage"
+	"github.com/sirupsen/logrus"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -48,7 +49,7 @@ func TestEDPRegistration_Run(t *testing.T) {
 	step := NewEDPRegistrationStep(memoryStorage.Operations(), client, edp.Config{
 		Environment: edpEnvironment,
 		Required:    true,
-	})
+	}, logrus.New())
 
 	// when
 	_, repeat, err := step.Run(internal.ProvisioningOperation{
@@ -88,7 +89,7 @@ func TestEDPRegistrationStep_selectEnvironmentKey(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			// given
-			step := NewEDPRegistrationStep(nil, nil, edp.Config{})
+			step := NewEDPRegistrationStep(nil, nil, edp.Config{}, logrus.New())
 
 			// when
 			envKey := step.selectEnvironmentKey(tc.region, logger.NewLogDummy())

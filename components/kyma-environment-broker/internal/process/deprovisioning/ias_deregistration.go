@@ -17,9 +17,9 @@ type IASDeregistrationStep struct {
 	bundleBuilder    ias.BundleBuilder
 }
 
-func NewIASDeregistrationStep(os storage.Operations, bundleBuilder ias.BundleBuilder) *IASDeregistrationStep {
+func NewIASDeregistrationStep(os storage.Operations, bundleBuilder ias.BundleBuilder, log logrus.FieldLogger) *IASDeregistrationStep {
 	return &IASDeregistrationStep{
-		operationManager: process.NewDeprovisionOperationManager(os),
+		operationManager: process.NewDeprovisionOperationManager(os, log),
 		bundleBuilder:    bundleBuilder,
 	}
 }

@@ -30,11 +30,11 @@ type OverridesFromSecretsAndConfigStep struct {
 	operationManager *process.ProvisionOperationManager
 }
 
-func NewOverridesFromSecretsAndConfigStep(c context.Context, cli client.Client, os storage.Operations) *OverridesFromSecretsAndConfigStep {
+func NewOverridesFromSecretsAndConfigStep(c context.Context, cli client.Client, os storage.Operations, log logrus.FieldLogger) *OverridesFromSecretsAndConfigStep {
 	return &OverridesFromSecretsAndConfigStep{
 		ctx:              c,
 		k8sClient:        cli,
-		operationManager: process.NewProvisionOperationManager(os),
+		operationManager: process.NewProvisionOperationManager(os, log),
 	}
 }
 
@@ -42,10 +42,10 @@ func (s *OverridesFromSecretsAndConfigStep) Name() string {
 	return "Overrides_From_Secrets_And_Config_Step"
 }
 
-func (s *OverridesFromSecretsAndConfigStep) Run(operation internal.ProvisioningOperation, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *OverridesFromSecretsAndConfigStep) Run(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 	pp, err := operation.GetProvisioningParameters()
 	if err != nil {
-		log.Errorf("cannot fetch provisioning parameters from operation: %s", err)
+		opLog.Errorf("cannot fetch provisioning parameters from operation: %s", err)
 		return s.operationManager.OperationFailed(operation, "invalid operation provisioning parameters")
 	}
 
@@ -55,8 +55,8 @@ func (s *OverridesFromSecretsAndConfigStep) Run(operation internal.ProvisioningO
 	secretList := &coreV1.SecretList{}
 	if err := s.k8sClient.List(s.ctx, secretList, s.listOptions()...); err != nil {
 		errMsg := fmt.Sprintf("cannot fetch list of secrets: %s", err)
-		log.Errorf(errMsg)
-		return s.operationManager.RetryOperation(operation, errMsg, 10*time.Second, 30*time.Minute, log)
+		opLog.Errorf(errMsg)
+		return s.operationManager.RetryOperation(operation, errMsg, 10*time.Second, 30*time.Minute)
 	}
 
 	for _, secret := range secretList.Items {
@@ -84,8 +84,8 @@ func (s *OverridesFromSecretsAndConfigStep) Run(operation internal.ProvisioningO
 	configMapList := &coreV1.ConfigMapList{}
 	if err := s.k8sClient.List(s.ctx, configMapList, s.listOptions()...); err != nil {
 		errMsg := fmt.Sprintf("cannot fetch list of config maps: %s", err)
-		log.Errorf(errMsg)
-		return s.operationManager.RetryOperation(operation, errMsg, 10*time.Second, 30*time.Minute, log)
+		opLog.Errorf(errMsg)
+		return s.operationManager.RetryOperation(operation, errMsg, 10*time.Second, 30*time.Minute)
 	}
 
 	for _, cm := range configMapList.Items {

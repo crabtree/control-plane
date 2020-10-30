@@ -19,9 +19,9 @@ type NatsStreamingStep struct {
 // ensure the interface is implemented
 var _ Step = (*NatsStreamingStep)(nil)
 
-func NewNatsStreamingOverridesStep(os storage.Operations) *NatsStreamingStep {
+func NewNatsStreamingOverridesStep(os storage.Operations, log logrus.FieldLogger) *NatsStreamingStep {
 	return &NatsStreamingStep{
-		operationManager: process.NewProvisionOperationManager(os),
+		operationManager: process.NewProvisionOperationManager(os, log),
 	}
 }
 
@@ -29,13 +29,13 @@ func (s *NatsStreamingStep) Name() string {
 	return "Provision Nats Streaming"
 }
 
-func (s *NatsStreamingStep) Run(operation internal.ProvisioningOperation, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *NatsStreamingStep) Run(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 	parameters, err := operation.GetProvisioningParameters()
 	if err != nil {
-		log.Errorf("cannot fetch provisioning parameters from operation: %s", err)
+		opLog.Errorf("cannot fetch provisioning parameters from operation: %s", err)
 		return s.operationManager.OperationFailed(operation, "invalid operation provisioning parameters")
 	}
-	log.Infof("Provisioning for PlanID: %s", parameters.PlanID)
+	opLog.Infof("Provisioning for PlanID: %s", parameters.PlanID)
 	operation.InputCreator.AppendOverrides(components.NatsStreaming, getNatsStreamingOverrides())
 	return operation, 0, nil
 }

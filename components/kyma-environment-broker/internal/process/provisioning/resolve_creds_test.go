@@ -39,7 +39,7 @@ func TestResolveCredentialsStepHappyPath_Run(t *testing.T) {
 		CredentialData:  map[string][]byte{},
 	}, nil)
 
-	step := NewResolveCredentialsStep(memoryStorage.Operations(), accountProviderMock)
+	step := NewResolveCredentialsStep(memoryStorage.Operations(), accountProviderMock, fixLogger())
 
 	// when
 	operation, repeat, err := step.Run(operation, log)
@@ -77,7 +77,7 @@ func TestResolveCredentialsStepHappyPathTrialDefaultProvider_Run(t *testing.T) {
 		CredentialData:  map[string][]byte{},
 	}, nil)
 
-	step := NewResolveCredentialsStep(memoryStorage.Operations(), accountProviderMock)
+	step := NewResolveCredentialsStep(memoryStorage.Operations(), accountProviderMock, fixLogger())
 
 	// when
 	operation, repeat, err := step.Run(operation, log)
@@ -116,7 +116,7 @@ func TestResolveCredentialsStepHappyPathTrialGivenProvider_Run(t *testing.T) {
 		CredentialData:  map[string][]byte{},
 	}, nil)
 
-	step := NewResolveCredentialsStep(memoryStorage.Operations(), accountProviderMock)
+	step := NewResolveCredentialsStep(memoryStorage.Operations(), accountProviderMock, fixLogger())
 
 	// when
 	operation, repeat, err := step.Run(operation, log)
@@ -150,7 +150,7 @@ func TestResolveCredentialsStepRetry_Run(t *testing.T) {
 
 	accountProviderMock.On("GardenerCredentials", hyperscaler.GCP, statusGlobalAccountID).Return(hyperscaler.Credentials{}, errors.New("Failed!"))
 
-	step := NewResolveCredentialsStep(memoryStorage.Operations(), accountProviderMock)
+	step := NewResolveCredentialsStep(memoryStorage.Operations(), accountProviderMock, fixLogger())
 
 	operation.UpdatedAt = time.Now()
 

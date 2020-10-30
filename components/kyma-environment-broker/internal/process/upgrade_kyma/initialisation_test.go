@@ -55,7 +55,7 @@ func TestInitialisationStep_Run(t *testing.T) {
 			RuntimeID: StringPtr(fixRuntimeID),
 		}, nil)
 
-		step := NewInitialisationStep(memoryStorage.Operations(), memoryStorage.Instances(), provisionerClient, nil, nil)
+		step := NewInitialisationStep(memoryStorage.Operations(), memoryStorage.Instances(), provisionerClient, nil, log, nil)
 
 		// when
 		upgradeOperation, repeat, err := step.Run(upgradeOperation, log)
@@ -89,7 +89,7 @@ func TestInitialisationStep_Run(t *testing.T) {
 		inputBuilder := &automock.CreatorForPlan{}
 		inputBuilder.On("CreateUpgradeInput", fixProvisioningParameters()).Return(&input.RuntimeInput{}, nil)
 
-		step := NewInitialisationStep(memoryStorage.Operations(), memoryStorage.Instances(), provisionerClient, inputBuilder, nil)
+		step := NewInitialisationStep(memoryStorage.Operations(), memoryStorage.Instances(), provisionerClient, inputBuilder, log, nil)
 
 		// when
 		op, repeat, err := step.Run(upgradeOperation, log)

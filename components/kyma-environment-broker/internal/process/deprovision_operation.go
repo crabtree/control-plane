@@ -15,11 +15,13 @@ import (
 
 type DeprovisionOperationManager struct {
 	storage storage.Operations
+	log     logrus.FieldLogger
 }
 
-func NewDeprovisionOperationManager(storage storage.Operations) *DeprovisionOperationManager {
+func NewDeprovisionOperationManager(storage storage.Operations, log logrus.FieldLogger) *DeprovisionOperationManager {
 	return &DeprovisionOperationManager{
 		storage: storage,
+		log:     log,
 	}
 }
 
@@ -58,34 +60,36 @@ func (om *DeprovisionOperationManager) UpdateOperation(operation internal.Deprov
 func (om *DeprovisionOperationManager) InsertOperation(operation internal.DeprovisioningOperation) (internal.DeprovisioningOperation, time.Duration, error) {
 	err := om.storage.InsertDeprovisioningOperation(operation)
 	if err != nil {
+		om.log.Errorf("Error when calling UpdateUpgradeKymaOperation on storage for operation %s: %s", operation.ID, err.Error())
 		return operation, 1 * time.Minute, nil
 	}
 	return operation, 0, nil
 }
 
 // RetryOperationOnce retries the operation once and fails the operation when call second time
-func (om *DeprovisionOperationManager) RetryOperationOnce(operation internal.DeprovisioningOperation, errorMessage string, wait time.Duration, log logrus.FieldLogger) (internal.DeprovisioningOperation, time.Duration, error) {
-	return om.RetryOperation(operation, errorMessage, wait, wait+1, log)
+func (om *DeprovisionOperationManager) RetryOperationOnce(operation internal.DeprovisioningOperation, errorMessage string, wait time.Duration) (internal.DeprovisioningOperation, time.Duration, error) {
+	return om.RetryOperation(operation, errorMessage, wait, wait+1)
 }
 
 // RetryOperation retries an operation for at maxTime in retryInterval steps and fails the operation if retrying failed
-func (om *DeprovisionOperationManager) RetryOperation(operation internal.DeprovisioningOperation, errorMessage string, retryInterval time.Duration, maxTime time.Duration, log logrus.FieldLogger) (internal.DeprovisioningOperation, time.Duration, error) {
+func (om *DeprovisionOperationManager) RetryOperation(operation internal.DeprovisioningOperation, errorMessage string, retryInterval time.Duration, maxTime time.Duration) (internal.DeprovisioningOperation, time.Duration, error) {
 	since := time.Since(operation.UpdatedAt)
 
-	log.Infof("Retrying for %s in %s steps, error: %s", maxTime.String(), retryInterval.String(), errorMessage)
+	om.log.Infof("Retry Operation was triggered with message: %s", errorMessage)
+	om.log.Infof("Retrying for %s in %s steps", maxTime.String(), retryInterval.String())
 	if since < maxTime {
 		return operation, retryInterval, nil
 	}
-	log.Errorf("Aborting after %s of failing retries", maxTime.String())
+	om.log.Errorf("Aborting after %s of failing retries", maxTime.String())
 	return om.OperationFailed(operation, errorMessage)
 }
 
 // RetryOperationWithoutFail retries an operation for at maxTime in retryInterval steps and omits the operation if retrying failed
-func (om *DeprovisionOperationManager) RetryOperationWithoutFail(operation internal.DeprovisioningOperation, description string, retryInterval, maxTime time.Duration, log logrus.FieldLogger) (internal.DeprovisioningOperation, time.Duration, error) {
+func (om *DeprovisionOperationManager) RetryOperationWithoutFail(operation internal.DeprovisioningOperation, description string, retryInterval, maxTime time.Duration) (internal.DeprovisioningOperation, time.Duration, error) {
 	since := time.Since(operation.UpdatedAt)
 
-	log.Infof("Retry Operation was triggered with message: %s", description)
-	log.Infof("Retrying for %s in %s steps", maxTime.String(), retryInterval.String())
+	om.log.Infof("Retry Operation was triggered with message: %s", description)
+	om.log.Infof("Retrying for %s in %s steps", maxTime.String(), retryInterval.String())
 	if since < maxTime {
 		return operation, retryInterval, nil
 	}
@@ -95,7 +99,7 @@ func (om *DeprovisionOperationManager) RetryOperationWithoutFail(operation inter
 		return updatedOperation, repeat, nil
 	}
 
-	log.Errorf("Omitting after %s of failing retries", maxTime.String())
+	om.log.Errorf("Omitting after %s of failing retries", maxTime.String())
 	return updatedOperation, 0, nil
 }
 

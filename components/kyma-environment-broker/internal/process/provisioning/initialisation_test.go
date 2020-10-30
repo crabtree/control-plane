@@ -65,13 +65,13 @@ func TestInitialisationStep_RunInitialized(t *testing.T) {
 	avsConfig := avsConfig(mockOauthServer, mockAvsServer)
 	avsClient, err := avs.NewClient(context.TODO(), avsConfig, logrus.New())
 	assert.NoError(t, err)
-	avsDel := avs.NewDelegator(avsClient, avsConfig, memoryStorage.Operations())
+	avsDel := avs.NewDelegator(avsClient, avsConfig, memoryStorage.Operations(), fixLogger())
 	externalEvalAssistant := avs.NewExternalEvalAssistant(avsConfig)
 	externalEvalCreator := NewExternalEvalCreator(avsDel, false, externalEvalAssistant)
 	iasType := NewIASType(nil, true)
 
 	step := NewInitialisationStep(memoryStorage.Operations(), memoryStorage.Instances(), provisionerClient,
-		directorClient, nil, externalEvalCreator, iasType, time.Hour, newInMemoryKymaVersionConfigurator(map[string]string{}))
+		directorClient, nil, externalEvalCreator, iasType, time.Hour, newInMemoryKymaVersionConfigurator(map[string]string{}), fixLogger())
 
 	// when
 	operation, repeat, err := step.Run(operation, logger.NewLogDummy())
@@ -123,13 +123,13 @@ func TestInitialisationStep_RunUninitialized(t *testing.T) {
 	avsConfig := avsConfig(mockOauthServer, mockAvsServer)
 	avsClient, err := avs.NewClient(context.TODO(), avsConfig, logger.NewLogDummy())
 	assert.NoError(t, err)
-	avsDel := avs.NewDelegator(avsClient, avsConfig, memoryStorage.Operations())
+	avsDel := avs.NewDelegator(avsClient, avsConfig, memoryStorage.Operations(), fixLogger())
 	externalEvalAssistant := avs.NewExternalEvalAssistant(avsConfig)
 	externalEvalCreator := NewExternalEvalCreator(avsDel, false, externalEvalAssistant)
 	iasType := NewIASType(nil, true)
 
 	step := NewInitialisationStep(memoryStorage.Operations(), memoryStorage.Instances(), provisionerClient,
-		directorClient, nil, externalEvalCreator, iasType, time.Hour, newInMemoryKymaVersionConfigurator(map[string]string{}))
+		directorClient, nil, externalEvalCreator, iasType, time.Hour, newInMemoryKymaVersionConfigurator(map[string]string{}), fixLogger())
 
 	// when
 	operation, repeat, err := step.Run(operation, logger.NewLogDummy())

@@ -28,7 +28,7 @@ func TestLmsActivationStepShouldNotActivate(t *testing.T) {
 	mockStep := &automock.Step{}
 	mockStep.On("Name").Return("Test")
 
-	activationStep := NewLmsActivationStep(memoryStorage.Operations(), cfg, mockStep)
+	activationStep := NewLmsActivationStep(memoryStorage.Operations(), cfg, mockStep, fixLogger())
 
 	// When
 	returnedOperation, time, err := activationStep.Run(operation, log)
@@ -53,7 +53,7 @@ func TestLmsActivationStepShouldActivateForAll(t *testing.T) {
 	mockStep := &automock.Step{}
 	mockStep.On("Run", operation, log).Return(anotherOperation, activationTime, nil)
 
-	activationStep := NewLmsActivationStep(memoryStorage.Operations(), cfg, mockStep)
+	activationStep := NewLmsActivationStep(memoryStorage.Operations(), cfg, mockStep, fixLogger())
 
 	// When
 	returnedOperation, time, err := activationStep.Run(operation, log)
@@ -78,7 +78,7 @@ func TestLmsActivationStepShouldActivateForOne(t *testing.T) {
 	mockStep := &automock.Step{}
 	mockStep.On("Run", operation, log).Return(anotherOperation, activationTime, nil)
 
-	activationStep := NewLmsActivationStep(memoryStorage.Operations(), cfg, mockStep)
+	activationStep := NewLmsActivationStep(memoryStorage.Operations(), cfg, mockStep, fixLogger())
 
 	// When
 	returnedOperation, time, err := activationStep.Run(operation, log)

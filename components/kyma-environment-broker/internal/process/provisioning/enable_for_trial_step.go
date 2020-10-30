@@ -19,10 +19,10 @@ type EnableForTrialPlanStep struct {
 // ensure the interface is implemented
 var _ Step = (*EnableForTrialPlanStep)(nil)
 
-func NewEnableForTrialPlanStep(os storage.Operations, step Step) *EnableForTrialPlanStep {
+func NewEnableForTrialPlanStep(os storage.Operations, step Step, log logrus.FieldLogger) *EnableForTrialPlanStep {
 	return &EnableForTrialPlanStep{
 		step:             step,
-		operationManager: process.NewProvisionOperationManager(os),
+		operationManager: process.NewProvisionOperationManager(os, log),
 	}
 }
 
@@ -30,15 +30,15 @@ func (s *EnableForTrialPlanStep) Name() string {
 	return s.step.Name()
 }
 
-func (s *EnableForTrialPlanStep) Run(operation internal.ProvisioningOperation, log logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
+func (s *EnableForTrialPlanStep) Run(operation internal.ProvisioningOperation, opLog logrus.FieldLogger) (internal.ProvisioningOperation, time.Duration, error) {
 	pp, err := operation.GetProvisioningParameters()
 	if err != nil {
-		log.Errorf("cannot fetch provisioning parameters from operation: %s", err)
+		opLog.Errorf("cannot fetch provisioning parameters from operation: %s", err)
 		return s.operationManager.OperationFailed(operation, "invalid operation provisioning parameters")
 	}
 	if broker.IsTrialPlan(pp.PlanID) {
-		log.Infof("Running step %s", s.Name())
-		return s.step.Run(operation, log)
+		opLog.Infof("Running step %s", s.Name())
+		return s.step.Run(operation, opLog)
 	}
 
 	return operation, 0, nil

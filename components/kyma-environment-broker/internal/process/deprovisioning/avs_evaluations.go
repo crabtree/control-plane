@@ -19,13 +19,14 @@ type AvsEvaluationRemovalStep struct {
 	deProvisioningManager *process.DeprovisionOperationManager
 }
 
-func NewAvsEvaluationsRemovalStep(delegator *avs.Delegator, operationsStorage storage.Operations, externalEvalAssistant, internalEvalAssistant avs.EvalAssistant) *AvsEvaluationRemovalStep {
+func NewAvsEvaluationsRemovalStep(delegator *avs.Delegator, operationsStorage storage.Operations, externalEvalAssistant,
+	internalEvalAssistant avs.EvalAssistant, log logrus.FieldLogger) *AvsEvaluationRemovalStep {
 	return &AvsEvaluationRemovalStep{
 		delegator:             delegator,
 		operationsStorage:     operationsStorage,
 		externalEvalAssistant: externalEvalAssistant,
 		internalEvalAssistant: internalEvalAssistant,
-		deProvisioningManager: process.NewDeprovisionOperationManager(operationsStorage),
+		deProvisioningManager: process.NewDeprovisionOperationManager(operationsStorage, log),
 	}
 }
 
@@ -33,21 +34,21 @@ func (ars *AvsEvaluationRemovalStep) Name() string {
 	return "De-provision_AVS_Evaluations"
 }
 
-func (ars *AvsEvaluationRemovalStep) Run(deProvisioningOperation internal.DeprovisioningOperation, logger logrus.FieldLogger) (internal.DeprovisioningOperation, time.Duration, error) {
-	logger.Infof("Avs lifecycle %+v", deProvisioningOperation.Avs)
+func (ars *AvsEvaluationRemovalStep) Run(deProvisioningOperation internal.DeprovisioningOperation, opLog logrus.FieldLogger) (internal.DeprovisioningOperation, time.Duration, error) {
+	opLog.Infof("Avs lifecycle %+v", deProvisioningOperation.Avs)
 	if deProvisioningOperation.Avs.AVSExternalEvaluationDeleted && deProvisioningOperation.Avs.AVSInternalEvaluationDeleted {
-		logger.Infof("Both internal and external evaluations have been deleted")
+		opLog.Infof("Both internal and external evaluations have been deleted")
 		return deProvisioningOperation, 0, nil
 	}
 
-	deProvisioningOperation, err := ars.delegator.DeleteAvsEvaluation(deProvisioningOperation, logger, ars.internalEvalAssistant)
+	deProvisioningOperation, err := ars.delegator.DeleteAvsEvaluation(deProvisioningOperation, opLog, ars.internalEvalAssistant)
 	if err != nil {
-		return ars.deProvisioningManager.RetryOperationWithoutFail(deProvisioningOperation, err.Error(), 10*time.Second, 10*time.Minute, logger)
+		return ars.deProvisioningManager.RetryOperationWithoutFail(deProvisioningOperation, err.Error(), 10*time.Second, 10*time.Minute)
 	}
 
-	deProvisioningOperation, err = ars.delegator.DeleteAvsEvaluation(deProvisioningOperation, logger, ars.externalEvalAssistant)
+	deProvisioningOperation, err = ars.delegator.DeleteAvsEvaluation(deProvisioningOperation, opLog, ars.externalEvalAssistant)
 	if err != nil {
-		return ars.deProvisioningManager.RetryOperationWithoutFail(deProvisioningOperation, err.Error(), 10*time.Second, 10*time.Minute, logger)
+		return ars.deProvisioningManager.RetryOperationWithoutFail(deProvisioningOperation, err.Error(), 10*time.Second, 10*time.Minute)
 	}
 	return deProvisioningOperation, 0, nil
 
